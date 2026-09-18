@@ -93,7 +93,7 @@ export const ClassesTab: React.FC = () => {
             <h3 className="text-xl font-bold text-slate-900">Class Scheduling & Sessions</h3>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Real-time schedule with automated teacher conflict prevention and Google Meet room integration.
+            Real-time schedule with automated teacher conflict prevention and Video Class room integration.
           </p>
         </div>
 
@@ -283,7 +283,7 @@ export const ClassesTab: React.FC = () => {
                 <th className="py-3.5 px-4 text-start">Course & Batch / Student</th>
                 <th className="py-3.5 px-4 text-start">Teacher</th>
                 <th className="py-3.5 px-4 text-start">Date & Time</th>
-                <th className="py-3.5 px-4 text-start">Google Meet</th>
+                <th className="py-3.5 px-4 text-start">Video Class Room</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4 text-end">Session Actions</th>
               </tr>

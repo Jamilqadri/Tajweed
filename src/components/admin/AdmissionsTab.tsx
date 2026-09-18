@@ -437,28 +437,26 @@ export const AdmissionsTab: React.FC = () => {
                   <span className="font-bold text-slate-900 capitalize">{selectedAdmission.gender}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block font-medium">Date of Birth</span>
-                  <span className="font-bold text-slate-900">{selectedAdmission.dob}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium">Mobile Number</span>
-                  <span className="font-bold text-slate-900">{selectedAdmission.mobile}</span>
+                  <span className="text-slate-400 block font-medium">Age</span>
+                  <span className="font-bold text-slate-900">{selectedAdmission.age ? `${selectedAdmission.age} years` : 'N/A'}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">WhatsApp Number</span>
                   <span className="font-bold text-slate-900">{selectedAdmission.whatsapp}</span>
                 </div>
+                <div>
+                  <span className="text-slate-400 block font-medium">State</span>
+                  <span className="font-bold text-slate-900">{selectedAdmission.state || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block font-medium">District</span>
+                  <span className="font-bold text-slate-900">{selectedAdmission.district || selectedAdmission.city}</span>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-slate-400 block font-medium">City & State</span>
-                  <span className="font-bold text-slate-900">{selectedAdmission.city}, {selectedAdmission.state}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium">Address</span>
-                  <span className="font-bold text-slate-900">{selectedAdmission.address}</span>
-                </div>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <span className="text-slate-400 block font-medium">Full Address (Mohalla & PIN Code)</span>
+                <span className="font-bold text-slate-900">{selectedAdmission.address}</span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 bg-blue-50/70 p-4 rounded-xl border border-blue-200">

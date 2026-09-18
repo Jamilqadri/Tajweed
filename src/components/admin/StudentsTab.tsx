@@ -248,6 +248,10 @@ export const StudentsTab: React.FC = () => {
                   <span className="font-bold text-slate-900 capitalize">{selectedStudent.gender}</span>
                 </div>
                 <div>
+                  <span className="text-slate-400 block font-medium">Age</span>
+                  <span className="font-bold text-slate-900">{selectedStudent.age ? `${selectedStudent.age} years` : 'N/A'}</span>
+                </div>
+                <div>
                   <span className="text-slate-400 block font-medium">Mobile Number</span>
                   <span className="font-bold text-slate-900">{selectedStudent.mobile}</span>
                 </div>
@@ -256,8 +260,8 @@ export const StudentsTab: React.FC = () => {
                   <span className="font-bold text-slate-900">{selectedStudent.whatsapp}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block font-medium">City & State</span>
-                  <span className="font-bold text-slate-900">{selectedStudent.city}, {selectedStudent.state}</span>
+                  <span className="text-slate-400 block font-medium">State & District</span>
+                  <span className="font-bold text-slate-900">{selectedStudent.district ? `${selectedStudent.district}, ${selectedStudent.state}` : `${selectedStudent.city}, ${selectedStudent.state}`}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Full Address</span>

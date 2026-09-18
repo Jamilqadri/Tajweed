@@ -4,8 +4,6 @@ import {
   X,
   Lock,
   User,
-  GraduationCap,
-  Shield,
   ArrowRight,
   AlertCircle,
   Sparkles,
@@ -26,7 +24,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onClose,
   onOpenAdmission,
 }) => {
-  const { t, login, identifyRole, switchUserRole, language } = useApp();
+  const { t, login, identifyRole, language } = useApp();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -70,11 +68,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         );
       }
     }, 300);
-  };
-
-  const handleDemoClick = (role: Role, specificId?: string) => {
-    switchUserRole(role, specificId);
-    onClose();
   };
 
   return (
@@ -199,73 +192,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </button>
           </form>
 
-          {/* Quick 1-Click Access for Testing All Roles */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center mb-2.5">
-              {language === 'ur' ? 'آسان ڈیمو لاگ ان (ایک کلک)' : 'Quick 1-Click Demo Login'}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleDemoClick('super_admin')}
-                className="p-2.5 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-purple-950 font-semibold text-start transition-colors"
-              >
-                <div className="flex items-center gap-1.5 font-bold">
-                  <Shield className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Super Admin</span>
-                </div>
-                <div className="text-[10px] text-purple-800 font-mono mt-0.5 font-medium leading-tight">
-                  ID: Tajweed25 • Pass: Tajweed26
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoClick('admin')}
-                className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-950 font-semibold text-start transition-colors"
-              >
-                <div className="flex items-center gap-1.5 font-bold">
-                  <Shield className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Admin</span>
-                </div>
-                <div className="text-[10px] text-blue-700 truncate mt-0.5">
-                  {language === 'ur' ? 'ایڈمنسٹریٹر' : 'Daily Operations'}
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoClick('teacher')}
-                className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 font-semibold text-start transition-colors"
-              >
-                <div className="flex items-center gap-1.5 font-bold">
-                  <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Teacher</span>
-                </div>
-                <div className="text-[10px] text-emerald-700 truncate mt-0.5">
-                  {language === 'ur' ? 'قاری محمد سعید' : 'Qari M. Saeed'}
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoClick('student', 'user_student_1')}
-                className="p-2.5 rounded-xl border border-sky-200 bg-sky-50/70 hover:bg-sky-100 text-sky-950 font-semibold text-start transition-colors"
-              >
-                <div className="flex items-center gap-1.5 font-bold">
-                  <User className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Student (KT...)</span>
-                </div>
-                <div className="text-[10px] text-sky-700 truncate mt-0.5">
-                  {language === 'ur' ? 'طارق (گروپ کلاس)' : 'Tariq (Group)'}
-                </div>
-              </button>
-            </div>
-          </div>
-
           {/* Admission link */}
-          <div className="text-center pt-2 border-t border-slate-100">
+          <div className="text-center pt-3 border-t border-slate-100">
             <span className="text-xs text-slate-500">
               {language === 'ur' ? 'ابھی تک داخلہ نہیں لیا؟ ' : 'Not admitted yet? '}
             </span>

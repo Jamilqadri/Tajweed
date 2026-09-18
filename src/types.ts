@@ -20,6 +20,7 @@ export interface AdminPermissions {
   admissions: boolean;
   reports: boolean;
   settings: boolean;
+  downloadRecordings?: boolean;
 }
 
 export interface User {
@@ -41,17 +42,19 @@ export interface Student {
   userId: string;
   fullName: string;
   fatherName: string;
+  gender: 'male' | 'female';
   mobile: string;
   whatsapp: string;
-  dob: string;
-  gender: 'male' | 'female';
-  city: string;
+  age?: number | string;
+  dob?: string;
   state: string;
+  district?: string;
+  city?: string;
   address: string;
   courseId: string;
   classType: ClassType;
   preferredTime: string;
-  previousKnowledge: string;
+  previousKnowledge?: string;
   additionalNote?: string;
   admissionStatus: AdmissionStatus;
   rejectionReason?: string;
@@ -102,6 +105,7 @@ export interface Teacher {
   joiningDate: string;
   status: 'active' | 'inactive';
   bio?: string;
+  initialPassword?: string;
   assignedStudentIds?: string[];
   assignedGroupIds?: string[];
 }
@@ -115,6 +119,7 @@ export interface AdminUser {
   phone: string;
   mobile?: string;
   status: 'active' | 'inactive';
+  initialPassword?: string;
   permissions: AdminPermissions;
   createdAt: string;
 }
@@ -206,14 +211,18 @@ export interface GoogleSheetRow {
   name: string;
   fullName?: string;
   fatherName?: string;
+  gender?: string;
   mobile: string;
   whatsapp?: string;
+  age?: number | string;
   course: string;
   courseId?: string;
   classType: string;
   preferredTime?: string;
+  district?: string;
   city?: string;
   state?: string;
+  address?: string;
   timestamp?: string;
   admissionDate: string;
   status: string;

@@ -158,7 +158,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="text-[11px] text-slate-400">Strictly locked to 10 for quality assurance.</span>
           </div>
           <div>
-            <label className="font-bold text-slate-700 block mb-1">Google Meet Room Join Window</label>
+            <label className="font-bold text-slate-700 block mb-1">Live Video Class Join Window</label>
             <input
               type="text"
               readOnly
@@ -297,7 +297,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
           <div className="text-3xl font-black text-slate-900">{todaysClasses.length}</div>
-          <div className="text-[11px] text-blue-600 font-semibold mt-1">Google Meet Live Rooms</div>
+          <div className="text-[11px] text-blue-600 font-semibold mt-1">Live Video Classes</div>
         </div>
 
         {/* Pending Admissions */}
@@ -360,7 +360,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div>
             <h3 className="text-lg font-bold text-slate-900">{t('todaysClasses')}</h3>
             <p className="text-xs text-slate-500">
-              Live Google Meet sessions scheduled for today ({todayStr})
+              Live Video Class sessions scheduled for today ({todayStr})
             </p>
           </div>
 
@@ -383,7 +383,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <th className="py-3 px-4 text-start">Teacher</th>
                 <th className="py-3 px-4 text-start">Time</th>
                 <th className="py-3 px-4 text-start">Class Type</th>
-                <th className="py-3 px-4 text-center">Google Meet</th>
+                <th className="py-3 px-4 text-center">{t('googleMeet')}</th>
                 <th className="py-3 px-4 text-center">Status</th>
               </tr>
             </thead>

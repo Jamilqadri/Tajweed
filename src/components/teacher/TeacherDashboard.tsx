@@ -15,6 +15,7 @@ import {
   Sparkles,
   User,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 import { ClassMeetModal } from '../classroom/ClassMeetModal';
 
@@ -27,7 +28,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   currentTab,
   onSelectTab,
 }) => {
-  const { currentTeacher, students, groups, courses, classes, updateClassStatus, t } = useApp();
+  const { currentTeacher, students, groups, courses, classes, updateClassStatus, language, t } = useApp();
 
   const [activeMeetClass, setActiveMeetClass] = useState<ScheduledClass | null>(null);
 
@@ -295,7 +296,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Today's Classes</span>
           <div className="text-3xl font-black text-slate-900 mt-1">{todaysClasses.length}</div>
-          <div className="text-[11px] text-purple-600 font-semibold mt-0.5">Live Google Meet</div>
+          <div className="text-[11px] text-purple-600 font-semibold mt-0.5">Live Video Class</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -305,7 +306,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       </div>
 
-      {/* Today's Classes List with Google Meet Button */}
+      {/* Today's Classes List with Video Class Button */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -360,18 +361,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setActiveMeetClass(cls)}
                       className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 ${
                         joinStatus.isAvailable
                           ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 ring-2 ring-blue-200'
-                          : 'bg-slate-800 hover:bg-slate-900 shadow-slate-900/20'
+                          : 'bg-slate-900 hover:bg-black shadow-slate-900/20'
                       }`}
+                      title="Start In-App Live Classroom with real Video, Audio, Whiteboard & Quran Reader"
                     >
                       <Video className="w-4 h-4" />
-                      <span>{t('joinGoogleMeet')}</span>
+                      <span>{language === 'ur' ? 'لائیو ویڈیو کلاس شروع کریں' : 'Start Live Video Class'}</span>
                     </button>
 
                     {cls.status === 'live' && (

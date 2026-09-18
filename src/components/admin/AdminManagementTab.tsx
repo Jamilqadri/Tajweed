@@ -25,6 +25,8 @@ export const AdminManagementTab: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
+  const [adminUserId, setAdminUserId] = useState('');
+  const [adminPassword, setAdminPassword] = useState('admin123');
   const [permissions, setPermissions] = useState<AdminPermissions>({
     admissions: true,
     students: true,
@@ -35,12 +37,15 @@ export const AdminManagementTab: React.FC = () => {
     fees: true,
     reports: true,
     settings: false,
+    downloadRecordings: false,
   });
 
   const resetForm = () => {
     setFullName('');
     setEmail('');
     setMobile('');
+    setAdminUserId('');
+    setAdminPassword('admin123');
     setPermissions({
       admissions: true,
       students: true,
@@ -51,6 +56,7 @@ export const AdminManagementTab: React.FC = () => {
       fees: true,
       reports: true,
       settings: false,
+      downloadRecordings: false,
     });
     setIsCreating(false);
     setEditingAdmin(null);
@@ -66,6 +72,8 @@ export const AdminManagementTab: React.FC = () => {
       mobile,
       permissions,
       status: 'active',
+      userId: adminUserId.trim() || undefined,
+      initialPassword: adminPassword || 'admin123',
     });
     resetForm();
   };
@@ -79,6 +87,7 @@ export const AdminManagementTab: React.FC = () => {
       email,
       mobile,
       permissions,
+      initialPassword: adminPassword || 'admin123',
     });
     resetForm();
   };
@@ -88,7 +97,12 @@ export const AdminManagementTab: React.FC = () => {
     setFullName(admin.fullName || admin.name || '');
     setEmail(admin.email);
     setMobile(admin.mobile || admin.phone || '');
-    setPermissions({ ...admin.permissions });
+    setAdminUserId(admin.id || admin.userId || '');
+    setAdminPassword((admin as any).initialPassword || 'admin123');
+    setPermissions({
+      downloadRecordings: false,
+      ...admin.permissions,
+    });
     setIsCreating(true);
   };
 
@@ -108,6 +122,7 @@ export const AdminManagementTab: React.FC = () => {
     { key: 'fees', label: 'Fees' },
     { key: 'reports', label: 'Reports' },
     { key: 'settings', label: 'Settings' },
+    { key: 'downloadRecordings', label: 'Recordings Download (ڈاؤنلوڈ اجازت)' },
   ];
 
   return (
@@ -202,6 +217,51 @@ export const AdminManagementTab: React.FC = () => {
             </div>
           </div>
 
+          {/* Login Credentials Section */}
+          <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3.5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="font-bold text-purple-900 text-xs">
+                Admin Login Credentials / ایڈمن یوزر آئی ڈی اور پاسورڈ
+              </span>
+              <span className="text-[10px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-medium">
+                Super Admin Controlled
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-800 mb-1">
+                  Admin User ID / یوزر آئی ڈی
+                </label>
+                <input
+                  type="text"
+                  value={adminUserId}
+                  onChange={(e) => setAdminUserId(e.target.value)}
+                  placeholder="e.g. ADM-03 or bilal_admin (Leave blank to auto-generate)"
+                  className="w-full p-2.5 rounded-lg border border-purple-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-purple-200"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  ایڈمن کے لیے مخصوص یوزر آئی ڈی درج کریں
+                </p>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-800 mb-1">
+                  Password / لاگ ان پاسورڈ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="e.g. admin123 or strong password"
+                  className="w-full p-2.5 rounded-lg border border-purple-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-purple-200"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  ایڈمن کے لیے اپنا منتخب کردہ پاسورڈ لکھیں (Default: admin123)
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Granular Permissions Matrix */}
           <div>
             <label className="block text-xs font-bold text-slate-900 mb-2">
@@ -278,7 +338,14 @@ export const AdminManagementTab: React.FC = () => {
                       </div>
                       <div>
                         <div className="font-bold text-slate-900">{admin.fullName || admin.name}</div>
-                        <div className="text-[11px] text-slate-400">Created: {admin.createdAt}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-mono text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.2 rounded border border-purple-200">
+                            ID: {admin.id}
+                          </span>
+                          <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200">
+                            Pass: {(admin as any).initialPassword || 'admin123'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -292,6 +359,17 @@ export const AdminManagementTab: React.FC = () => {
                     <div className="flex flex-wrap gap-1 max-w-xs">
                       {permissionKeys.map(({ key, label }) => {
                         if (!admin.permissions[key]) return null;
+                        if (key === 'downloadRecordings') {
+                          return (
+                            <span
+                              key={key}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1"
+                            >
+                              <Lock className="w-2.5 h-2.5" />
+                              Download Permitted (ڈاؤنلوڈ مجاز)
+                            </span>
+                          );
+                        }
                         return (
                           <span
                             key={key}

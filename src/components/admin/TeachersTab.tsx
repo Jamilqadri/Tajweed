@@ -38,6 +38,8 @@ export const TeachersTab: React.FC = () => {
   const [experience, setExperience] = useState('');
   const [languages, setLanguages] = useState('English, Urdu, Arabic');
   const [specialization, setSpecialization] = useState('Hafs an Asim');
+  const [customUserId, setCustomUserId] = useState('');
+  const [initialPassword, setInitialPassword] = useState('teacher123');
 
   const resetForm = () => {
     setFullName('');
@@ -51,6 +53,8 @@ export const TeachersTab: React.FC = () => {
     setQualification('');
     setTajweedQualification('');
     setExperience('');
+    setCustomUserId('');
+    setInitialPassword('teacher123');
     setIsCreating(false);
     setEditingTeacher(null);
   };
@@ -75,33 +79,39 @@ export const TeachersTab: React.FC = () => {
         experience,
         languages: languages.split(',').map((s) => s.trim()),
         specialization,
+        initialPassword: initialPassword || 'teacher123',
       });
     } else {
-      addTeacher({
-        fullName,
-        fatherName,
-        profilePhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        joiningDate: new Date().toISOString().split('T')[0],
-        mobile,
-        whatsapp: whatsapp || mobile,
-        email,
-        gender,
-        city,
-        state,
-        address,
-        qualification,
-        tajweedQualification,
-        experience,
-        languages: languages.split(',').map((s) => s.trim()),
-        specialization,
-        status: 'active',
-        assignedStudentIds: [],
-        assignedGroupIds: [],
-        availableSlots: [
-          { day: 'Mon-Sat', startTime: '06:00', endTime: '10:00', isBooked: false },
-          { day: 'Mon-Sat', startTime: '18:00', endTime: '22:00', isBooked: false },
-        ],
-      });
+      addTeacher(
+        {
+          fullName,
+          fatherName,
+          profilePhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          joiningDate: new Date().toISOString().split('T')[0],
+          mobile,
+          whatsapp: whatsapp || mobile,
+          email,
+          gender,
+          city,
+          state,
+          address,
+          qualification,
+          tajweedQualification,
+          experience,
+          languages: languages.split(',').map((s) => s.trim()),
+          specialization,
+          status: 'active',
+          assignedStudentIds: [],
+          assignedGroupIds: [],
+          availableSlots: [
+            { day: 'Mon-Sat', startTime: '06:00', endTime: '10:00', isBooked: false },
+            { day: 'Mon-Sat', startTime: '18:00', endTime: '22:00', isBooked: false },
+          ],
+          initialPassword: initialPassword || 'teacher123',
+        },
+        initialPassword || 'teacher123',
+        customUserId.trim() || undefined
+      );
     }
     resetForm();
   };
@@ -122,6 +132,8 @@ export const TeachersTab: React.FC = () => {
     setExperience(teacher.experience);
     setLanguages(teacher.languages.join(', '));
     setSpecialization(teacher.specialization);
+    setCustomUserId(teacher.teacherId || '');
+    setInitialPassword(teacher.initialPassword || 'teacher123');
     setIsCreating(true);
   };
 
@@ -232,6 +244,51 @@ export const TeachersTab: React.FC = () => {
                 placeholder="9876543210"
                 className="w-full p-2.5 rounded-lg border border-slate-300 text-slate-900"
               />
+            </div>
+
+            {/* Custom Credentials Section */}
+            <div className="sm:col-span-3 bg-blue-50/80 border border-blue-200 rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-bold text-blue-900 text-xs">
+                  Login Credentials / لاگ ان یوزر آئی ڈی اور پاسورڈ
+                </span>
+                <span className="text-[10px] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-medium">
+                  Super Admin Configured
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-800 mb-1">
+                    Teacher User ID / یوزر آئی ڈی
+                  </label>
+                  <input
+                    type="text"
+                    value={customUserId}
+                    onChange={(e) => setCustomUserId(e.target.value)}
+                    placeholder="e.g. KT-TEA-04 or qari_ahmed (Leave blank to auto-generate)"
+                    className="w-full p-2.5 rounded-lg border border-blue-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    ٹیچر کا لاگ ان یوزر آئی ڈی درج کریں یا خودکار تخلیق کے لیے خالی رہنے دیں
+                  </p>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-800 mb-1">
+                    Password / لاگ ان پاسورڈ <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={initialPassword}
+                    onChange={(e) => setInitialPassword(e.target.value)}
+                    placeholder="e.g. teacher123 or strong password"
+                    className="w-full p-2.5 rounded-lg border border-blue-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    ٹیچر کے لیے اپنا منتخب کردہ پاسورڈ لکھیں (Default: teacher123)
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -373,6 +430,22 @@ export const TeachersTab: React.FC = () => {
                   <div><strong>Sanad:</strong> {teacher.tajweedQualification}</div>
                   <div><strong>Experience:</strong> {teacher.experience}</div>
                   <div><strong>Languages:</strong> {teacher.languages.join(', ')}</div>
+                </div>
+
+                {/* Login Credentials Badge */}
+                <div className="mt-3 bg-blue-50/60 border border-blue-100 rounded-xl p-2.5 text-xs">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-blue-900 mb-1">
+                    <span>Credentials / لاگ ان تفصیلات</span>
+                    <span className="font-mono bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">
+                      {teacher.teacherId}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                    <span>Password / پاسورڈ:</span>
+                    <span className="font-mono font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-blue-100">
+                      {teacher.initialPassword || 'teacher123'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Counts */}

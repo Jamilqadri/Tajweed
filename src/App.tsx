@@ -101,7 +101,7 @@ const AppContent: React.FC = () => {
         }}
       />
 
-      {/* Live Google Meet Tajweed Classroom Simulation */}
+      {/* Live Video Class Tajweed Classroom Modal */}
       {activeMeetingClass && (
         <ClassMeetModal
           classItem={activeMeetingClass}

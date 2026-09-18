@@ -76,8 +76,8 @@ export function getClassJoinStatus(
     if (nowMs >= joinWindowOpenMs && nowMs <= classEndTimeMs) {
       return {
         isAvailable: true,
-        statusText: 'Class Ready — Join Google Meet',
-        statusTextUrdu: 'کلاس کا وقت ہو گیا ہے — میٹنگ میں شامل ہوں',
+        statusText: 'Class Ready — Join Video Class',
+        statusTextUrdu: 'کلاس کا وقت ہو گیا ہے — ویڈیو کلاس میں شامل ہوں',
         badgeType: 'active',
         formattedTimeDisplay,
       };

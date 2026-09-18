@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   FileText,
   FileImage,
+  ExternalLink,
 } from 'lucide-react';
 import { ClassMeetModal } from '../classroom/ClassMeetModal';
 
@@ -207,7 +208,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <h3 className="text-xl font-bold text-slate-900">My Class Schedule & History</h3>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Complete calendar of live recitation sessions with Google Meet links.
+              Complete calendar of live recitation sessions with Video Class links.
             </p>
           </div>
         </div>
@@ -680,31 +681,55 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
             </div>
 
-            {/* Join Google Meet Button with 5-Minute Logic */}
-            <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setActiveMeetClass(nextClass)}
-                className={`w-full sm:w-auto px-7 py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-3 shadow-lg ${
-                  isJoinAvailable
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30 ring-4 ring-blue-100 animate-pulse'
-                    : 'bg-slate-800 hover:bg-slate-900 text-white shadow-slate-900/20'
-                }`}
-                title={isJoinAvailable ? 'Join live Google Meet class' : 'Preview classroom interface'}
-              >
-                <Video className="w-5 h-5 text-white" />
-                <span>
-                  {language === 'ur'
-                    ? (isJoinAvailable ? 'گوگل میٹ کلاس میں شامل ہوں' : 'کلاس روم جوائن کریں (ٹیسٹ/پیش نظارہ)')
-                    : (isJoinAvailable ? t('joinGoogleMeet') : 'Join Class (Preview / Test)')}
-                </span>
-              </button>
+            {/* Join Video Classroom Buttons & Guidance */}
+            <div className="flex flex-col items-start sm:items-end gap-2.5 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                {/* Primary Button: Direct In-App Video Classroom (Zero Login Barrier) */}
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetClass(nextClass)}
+                  className={`px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${
+                    isJoinAvailable
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30 ring-4 ring-blue-100 animate-pulse'
+                      : 'bg-slate-900 hover:bg-black text-white shadow-slate-900/20'
+                  }`}
+                  title="Direct Live Video Class with Camera, Audio, Screen Share & Whiteboard"
+                >
+                  <Video className="w-5 h-5 text-white" />
+                  <span>
+                    {language === 'ur'
+                      ? 'لائیو ویڈیو کلاس میں شامل ہوں'
+                      : 'Join Live Video Class'}
+                  </span>
+                </button>
 
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <span className={`w-2 h-2 rounded-full ${isJoinAvailable ? 'bg-emerald-500 animate-ping' : 'bg-amber-400'}`} />
-                <span className="font-medium">
-                  {language === 'ur' ? nextClassJoinStatus?.statusTextUrdu : nextClassJoinStatus?.statusText}
-                </span>
+                {/* Secondary Button: Alternative Room Link */}
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetClass(nextClass)}
+                  className="px-4 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-2 border border-slate-300 transition-colors"
+                  title="Academy Video Class Room"
+                >
+                  <Video className="w-4 h-4 text-blue-600" />
+                  <span>
+                    {language === 'ur' ? 'ویڈیو کلاس روم' : 'Video Classroom'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Guidance for Students */}
+              <div className="text-start sm:text-end space-y-1 max-w-sm">
+                <div className="flex items-center sm:justify-end gap-1.5 text-xs text-slate-500">
+                  <span className={`w-2 h-2 rounded-full ${isJoinAvailable ? 'bg-emerald-500 animate-ping' : 'bg-amber-400'}`} />
+                  <span className="font-medium">
+                    {language === 'ur' ? nextClassJoinStatus?.statusTextUrdu : nextClassJoinStatus?.statusText}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  {language === 'ur'
+                    ? '💡 رہنمائی: بغیر کسی لاگ ان یا اکاؤنٹ کے نیلا بٹن دبا کر براہِ راست لائیو ویڈیو کلاس میں شامل ہوں۔ مکمل پرائیویسی کے ساتھ کیمرہ، مائیک اور اسکرین شیئرنگ فعال ہے۔'
+                    : '💡 Note: Join the live video class directly without any login barrier. Live video, audio, whiteboard, and screen sharing are fully integrated.'}
+                </p>
               </div>
             </div>
           </div>

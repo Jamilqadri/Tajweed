@@ -169,7 +169,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <div className="text-xs">
                       <span className="font-bold text-slate-900 block">5-Min Live Classroom Unlock</span>
-                      <span className="text-slate-500">🔵 Join Google Meet activates right before class</span>
+                      <span className="text-slate-500">📹 Join Video Class activates right before class</span>
                     </div>
                   </div>
 
@@ -297,7 +297,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Automatic Group Google Meet link</span>
+                  <span>Automatic Group Video Class link</span>
                 </li>
               </ul>
             </div>

@@ -102,8 +102,16 @@ interface AppContextType {
   deleteCourse: (id: string) => boolean;
 
   // Teacher Management
-  createTeacher: (teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>, password?: string) => Teacher;
-  addTeacher: (teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>, password?: string) => Teacher;
+  createTeacher: (
+    teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>,
+    password?: string,
+    customUserId?: string
+  ) => Teacher;
+  addTeacher: (
+    teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>,
+    password?: string,
+    customUserId?: string
+  ) => Teacher;
   updateTeacher: (id: string, data: Partial<Teacher>) => boolean;
   toggleTeacherStatus: (id: string) => boolean;
 
@@ -140,7 +148,14 @@ interface AppContextType {
   rejectPayment: (paymentId: string, reason?: string) => boolean;
 
   // Super Admin
-  createAdmin: (name: string, email: string, phone: string, permissions: AdminPermissions) => AdminUser;
+  createAdmin: (
+    name: string,
+    email: string,
+    phone: string,
+    permissions: AdminPermissions,
+    password?: string,
+    customUserId?: string
+  ) => AdminUser;
   addAdmin: (data: any) => AdminUser;
   updateAdmin: (id: string, data: any) => boolean;
   updateAdminPermissions: (adminId: string, permissions: AdminPermissions) => boolean;
@@ -633,9 +648,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: 'gs_' + Date.now(),
       studentId,
       name: formData.fullName,
+      fullName: formData.fullName,
+      fatherName: formData.fatherName,
+      gender: formData.gender,
       mobile: formData.mobile,
+      whatsapp: formData.whatsapp,
+      age: formData.age,
       course: courseObj?.name || 'General Tajweed',
+      courseId: formData.courseId,
       classType: formData.classType === 'group' ? 'Group Class' : 'One-to-One Class',
+      preferredTime: formData.preferredTime,
+      state: formData.state,
+      district: formData.district,
+      city: formData.city,
+      address: formData.address,
       admissionDate: new Date().toISOString().split('T')[0],
       status: 'Pending Verification',
       assignedTeacher: 'Unassigned',
@@ -826,16 +852,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Teacher Management
-  const createTeacher = (teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>, password = 'teacher123'): Teacher => {
-    const userId = 'user_tea_' + Date.now();
-    const teacherId = `KT-TEA-0${teachers.length + 1}`;
+  const createTeacher = (
+    teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>,
+    password = 'teacher123',
+    customUserId?: string
+  ): Teacher => {
+    const rawCustom = (customUserId || teacherData.initialPassword ? customUserId : '')?.trim();
+    const effectiveUserId = rawCustom
+      ? (rawCustom.startsWith('user_') ? rawCustom : `user_${rawCustom}`)
+      : ('user_tea_' + Date.now());
+    const teacherId = rawCustom
+      ? (rawCustom.toUpperCase().startsWith('KT-') ? rawCustom.toUpperCase() : `KT-TEA-${rawCustom.toUpperCase()}`)
+      : `KT-TEA-0${teachers.length + 1}`;
+
+    const effectivePassword = password || teacherData.initialPassword || 'teacher123';
 
     const newUser: User = {
-      id: userId,
+      id: effectiveUserId,
       name: teacherData.fullName,
       email: teacherData.email,
       phone: teacherData.mobile,
-      password,
+      password: effectivePassword,
       role: 'teacher',
       status: 'active',
       avatar: teacherData.profilePhoto || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
@@ -846,17 +883,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ...teacherData,
       id: 'teacher_' + Date.now(),
       teacherId,
-      userId,
+      userId: effectiveUserId,
+      initialPassword: effectivePassword,
     };
 
     setUsers((prev) => [...prev, newUser]);
     setTeachers((prev) => [...prev, newTeacher]);
-    addLog('CREATE_TEACHER', `Added teacher ${newTeacher.fullName} (${teacherId})`);
+    addLog('CREATE_TEACHER', `Added teacher ${newTeacher.fullName} (${teacherId}) with credentials`);
     return newTeacher;
   };
 
   const updateTeacher = (id: string, data: Partial<Teacher>): boolean => {
-    setTeachers((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
+    setTeachers((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          if (data.initialPassword || data.fullName || data.mobile || data.email) {
+            setUsers((uPrev) =>
+              uPrev.map((u) => {
+                if (u.id === t.userId) {
+                  return {
+                    ...u,
+                    password: data.initialPassword || u.password,
+                    name: data.fullName || u.name,
+                    email: data.email || u.email,
+                    phone: data.mobile || u.phone,
+                  };
+                }
+                return u;
+              })
+            );
+          }
+          return { ...t, ...data };
+        }
+        return t;
+      })
+    );
     addLog('UPDATE_TEACHER', `Updated teacher profile ${id}`);
     return true;
   };
@@ -1198,15 +1259,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     name: string,
     email: string,
     phone: string,
-    permissions: AdminPermissions
+    permissions: AdminPermissions,
+    password = 'admin123',
+    customUserId?: string
   ): AdminUser => {
-    const userId = 'user_adm_' + Date.now();
+    const rawCustom = customUserId?.trim();
+    const effectiveUserId = rawCustom
+      ? (rawCustom.startsWith('user_') ? rawCustom : `user_${rawCustom}`)
+      : ('user_adm_' + Date.now());
+    const adminId = rawCustom
+      ? (rawCustom.startsWith('adm_') ? rawCustom : `adm_${rawCustom}`)
+      : ('adm_' + Date.now());
+
+    const effectivePassword = password || 'admin123';
+
     const newUser: User = {
-      id: userId,
+      id: effectiveUserId,
       name,
       email,
       phone,
-      password: 'admin123',
+      password: effectivePassword,
       role: 'admin',
       status: 'active',
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
@@ -1214,19 +1286,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const newAdmin: AdminUser = {
-      id: 'adm_' + Date.now(),
-      userId,
+      id: adminId,
+      userId: effectiveUserId,
       name,
       email,
       phone,
       status: 'active',
+      initialPassword: effectivePassword,
       permissions,
       createdAt: new Date().toISOString(),
     };
 
     setUsers((prev) => [...prev, newUser]);
     setAdmins((prev) => [...prev, newAdmin]);
-    addLog('CREATE_ADMIN', `Super Admin created new admin ${name} (${email})`);
+    addLog('CREATE_ADMIN', `Super Admin created new admin ${name} (${email}) with custom credentials`);
     return newAdmin;
   };
 
@@ -1266,7 +1339,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       data.fullName || data.name,
       data.email,
       data.mobile || data.phone || '9876543210',
-      data.permissions
+      data.permissions,
+      data.password || data.initialPassword,
+      data.userId || data.customUserId
     );
   };
 
@@ -1274,6 +1349,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAdmins((prev) =>
       prev.map((a) => {
         if (a.id === id) {
+          if (data.initialPassword) {
+            setUsers((uPrev) =>
+              uPrev.map((u) => (u.id === a.userId ? { ...u, password: data.initialPassword } : u))
+            );
+          }
           return {
             ...a,
             ...data,
@@ -1282,6 +1362,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             phone: data.mobile || data.phone || a.phone,
             mobile: data.mobile || data.phone || a.mobile,
             permissions: data.permissions || a.permissions,
+            initialPassword: data.initialPassword || a.initialPassword,
           };
         }
         return a;
