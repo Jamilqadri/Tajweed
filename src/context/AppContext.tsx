@@ -370,40 +370,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setNotifications((prev) => [newN, ...prev]);
   };
 
-  // Helper to auto-detect role from any identifier (Student ID, email, phone, keyword)
+  // Helper to auto-detect role from any identifier (Student ID, email, phone, custom User ID, keyword)
   const identifyRole = (identifier: string): { role: Role | null; name?: string; label?: string } => {
     if (!identifier || identifier.trim().length === 0) {
       return { role: null };
     }
     const trimmed = identifier.trim().toLowerCase();
 
-    // 1. Check Student ID or Student records
-    const studentMatch = students.find(
-      (s) =>
-        s.studentId.toLowerCase() === trimmed ||
-        s.studentId.toLowerCase().includes(trimmed) ||
-        s.mobile === trimmed ||
-        ((s as any).email && (s as any).email.toLowerCase() === trimmed)
-    );
-    if (studentMatch || trimmed.startsWith('kt') || trimmed.includes('student')) {
-      const name = studentMatch ? studentMatch.fullName : 'Student Account';
-      return { role: 'student', name, label: 'طالب علم (Student)' };
-    }
-
-    // 2. Check Teacher records
-    const teacherMatch = teachers.find(
-      (t) =>
-        t.email.toLowerCase() === trimmed ||
-        t.mobile === trimmed ||
-        t.id.toLowerCase() === trimmed ||
-        (t.teacherId && t.teacherId.toLowerCase() === trimmed)
-    );
-    if (teacherMatch || trimmed.includes('teacher') || trimmed.includes('qari')) {
-      const name = teacherMatch ? teacherMatch.fullName : 'Teacher Account';
-      return { role: 'teacher', name, label: 'استاد محترم (Teacher)' };
-    }
-
-    // 3. Check Super Admin
+    // 1. Check Super Admin
     if (
       trimmed === 'tajweed25' ||
       trimmed === 'superadmin' ||
@@ -413,10 +387,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { role: 'super_admin', name: 'Super Admin (Head of Academy)', label: 'سپر ایڈمن (Super Admin)' };
     }
 
-    // 4. Check Admin records
+    // 2. Check Teacher records (by Email, Mobile, Teacher ID, User ID, or Database ID)
+    const teacherMatch = teachers.find(
+      (t) =>
+        (t.email && t.email.toLowerCase() === trimmed) ||
+        (t.mobile && t.mobile === trimmed) ||
+        (t.id && t.id.toLowerCase() === trimmed) ||
+        (t.teacherId && t.teacherId.toLowerCase() === trimmed) ||
+        (t.userId && t.userId.toLowerCase() === trimmed)
+    );
+    if (teacherMatch || trimmed.includes('teacher') || trimmed.includes('qari')) {
+      const name = teacherMatch ? teacherMatch.fullName : 'Teacher Account';
+      return { role: 'teacher', name, label: 'استاد محترم (Teacher)' };
+    }
+
+    // 3. Check Admin records (by Email, Mobile, Phone, Admin ID, or User ID)
     const adminMatch = admins.find(
       (a) =>
-        a.email.toLowerCase() === trimmed ||
+        (a.email && a.email.toLowerCase() === trimmed) ||
+        (a.id && a.id.toLowerCase() === trimmed) ||
+        (a.userId && a.userId.toLowerCase() === trimmed) ||
         (a.mobile && a.mobile === trimmed) ||
         (a.phone && a.phone === trimmed)
     );
@@ -429,12 +419,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
     }
 
+    // 4. Check Student ID or Student records
+    const studentMatch = students.find(
+      (s) =>
+        (s.studentId && s.studentId.toLowerCase() === trimmed) ||
+        (s.studentId && s.studentId.toLowerCase().includes(trimmed)) ||
+        (s.mobile && s.mobile === trimmed) ||
+        ((s as any).email && (s as any).email.toLowerCase() === trimmed)
+    );
+    if (studentMatch || trimmed.startsWith('kt') || trimmed.includes('student')) {
+      const name = studentMatch ? studentMatch.fullName : 'Student Account';
+      return { role: 'student', name, label: 'طالب علم (Student)' };
+    }
+
     // 5. Fallback check on User list
     const userMatch = users.find(
       (u) =>
-        u.email.toLowerCase() === trimmed ||
-        u.phone === trimmed ||
-        u.name.toLowerCase().includes(trimmed)
+        (u.email && u.email.toLowerCase() === trimmed) ||
+        (u.username && u.username.toLowerCase() === trimmed) ||
+        (u.phone && u.phone === trimmed) ||
+        (u.id && u.id.toLowerCase() === trimmed) ||
+        (u.name && u.name.toLowerCase().includes(trimmed))
     );
     if (userMatch) {
       let roleLabel = 'صارف (User)';
@@ -452,65 +457,120 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = (identifier: string, password?: string): { success: boolean; message?: string } => {
     const trimmed = identifier.trim().toLowerCase();
     if (!trimmed) {
-      return { success: false, message: 'Please enter your Student ID, Email, or Mobile number.' };
+      return { success: false, message: 'Please enter your Email, Student ID, or Mobile number.' };
     }
 
     let targetUser: User | undefined;
 
-    // 1. Try matching student by Student ID, mobile, or email
-    const studentMatch = students.find(
-      (s) =>
-        s.studentId.toLowerCase() === trimmed ||
-        s.mobile === trimmed ||
-        ((s as any).email && (s as any).email.toLowerCase() === trimmed)
-    );
-    if (studentMatch) {
-      targetUser = users.find((u) => u.id === studentMatch.userId || (u as any).studentId === studentMatch.studentId);
+    // 1. Check Super Admin keywords or founder email
+    if (trimmed === 'tajweed25' || trimmed === 'superadmin' || trimmed === 'super_admin' || trimmed === 'founder@kanzutajweed.com') {
+      targetUser = users.find((u) => u.role === 'super_admin');
     }
 
-    // 2. Try matching teacher by email, mobile, or ID
+    // 2. Try matching teacher by email, mobile, teacherId, userId, or id
     if (!targetUser) {
       const teacherMatch = teachers.find(
         (t) =>
-          t.email.toLowerCase() === trimmed ||
-          t.mobile === trimmed ||
-          t.id.toLowerCase() === trimmed ||
-          (t.teacherId && t.teacherId.toLowerCase() === trimmed)
+          (t.email && t.email.toLowerCase() === trimmed) ||
+          (t.mobile && t.mobile === trimmed) ||
+          (t.id && t.id.toLowerCase() === trimmed) ||
+          (t.teacherId && t.teacherId.toLowerCase() === trimmed) ||
+          (t.userId && t.userId.toLowerCase() === trimmed)
       );
       if (teacherMatch) {
-        targetUser = users.find((u) => u.id === teacherMatch.userId || u.email.toLowerCase() === teacherMatch.email.toLowerCase());
+        targetUser = users.find(
+          (u) =>
+            u.id === teacherMatch.userId ||
+            (u.email && u.email.toLowerCase() === teacherMatch.email.toLowerCase()) ||
+            (u.username && u.username.toLowerCase() === teacherMatch.email.toLowerCase())
+        );
+
+        // Self-heal/synthesize user record if not pre-seeded
+        if (!targetUser) {
+          targetUser = {
+            id: teacherMatch.userId || 'user_tea_' + teacherMatch.id,
+            name: teacherMatch.fullName,
+            email: teacherMatch.email,
+            username: teacherMatch.email,
+            phone: teacherMatch.mobile,
+            password: teacherMatch.initialPassword || 'teacher123',
+            role: 'teacher',
+            status: teacherMatch.status || 'active',
+            avatar: teacherMatch.profilePhoto || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+            createdAt: new Date().toISOString(),
+          };
+          setUsers((prev) => [...prev, targetUser!]);
+        }
       }
     }
 
-    // 3. Try matching admin by email, mobile, or phone
+    // 3. Try matching admin by email, mobile, phone, id, or userId
     if (!targetUser) {
       const adminMatch = admins.find(
         (a) =>
-          a.email.toLowerCase() === trimmed ||
+          (a.email && a.email.toLowerCase() === trimmed) ||
+          (a.id && a.id.toLowerCase() === trimmed) ||
+          (a.userId && a.userId.toLowerCase() === trimmed) ||
           (a.mobile && a.mobile === trimmed) ||
           (a.phone && a.phone === trimmed)
       );
       if (adminMatch) {
-        targetUser = users.find((u) => u.id === adminMatch.userId || u.email.toLowerCase() === adminMatch.email.toLowerCase());
+        targetUser = users.find(
+          (u) =>
+            u.id === adminMatch.userId ||
+            (u.email && u.email.toLowerCase() === adminMatch.email.toLowerCase()) ||
+            (u.username && u.username.toLowerCase() === adminMatch.email.toLowerCase())
+        );
+
+        // Self-heal/synthesize user record if not pre-seeded
+        if (!targetUser) {
+          const isSuper = (adminMatch as any).role === 'super_admin';
+          targetUser = {
+            id: adminMatch.userId || 'user_adm_' + adminMatch.id,
+            name: adminMatch.fullName || adminMatch.name,
+            email: adminMatch.email,
+            username: adminMatch.email,
+            phone: adminMatch.mobile || adminMatch.phone || '9876543210',
+            password: (adminMatch as any).initialPassword || 'admin123',
+            role: isSuper ? 'super_admin' : 'admin',
+            status: adminMatch.status || 'active',
+            avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+            createdAt: new Date().toISOString(),
+          };
+          setUsers((prev) => [...prev, targetUser!]);
+        }
       }
     }
 
-    // 4. Try matching direct users list by username, email, phone, or ID
+    // 4. Try matching student by Student ID, mobile, or email
+    if (!targetUser) {
+      const studentMatch = students.find(
+        (s) =>
+          (s.studentId && s.studentId.toLowerCase() === trimmed) ||
+          (s.mobile && s.mobile === trimmed) ||
+          ((s as any).email && (s as any).email.toLowerCase() === trimmed)
+      );
+      if (studentMatch) {
+        targetUser = users.find(
+          (u) => u.id === studentMatch.userId || (u as any).studentId === studentMatch.studentId
+        );
+      }
+    }
+
+    // 5. Try matching direct users list by email, username, phone, or ID
     if (!targetUser) {
       targetUser = users.find(
         (u) =>
+          (u.email && u.email.toLowerCase() === trimmed) ||
           (u.username && u.username.toLowerCase() === trimmed) ||
-          u.email.toLowerCase() === trimmed ||
-          u.phone === trimmed ||
-          u.id.toLowerCase() === trimmed
+          (u.phone && u.phone === trimmed) ||
+          (u.id && u.id.toLowerCase() === trimmed)
       );
     }
 
-    // 5. Convenient keyword match for quick testing (e.g. user typed "superadmin", "teacher", etc.)
+    // 6. Role aliases for quick testing
     if (!targetUser) {
-      if (trimmed === 'tajweed25' || trimmed === 'superadmin' || trimmed === 'super_admin') {
-        targetUser = users.find((u) => u.role === 'super_admin');
-      } else if (trimmed === 'admin') {
+      if (trimmed === 'admin') {
         targetUser = users.find((u) => u.role === 'admin');
       } else if (trimmed === 'teacher' || trimmed === 'qari') {
         targetUser = users.find((u) => u.role === 'teacher');
@@ -522,16 +582,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!targetUser) {
       return {
         success: false,
-        message: 'Account not found. Please verify your Student ID, Email, or Mobile number.',
+        message: 'Account not found. Please verify your Email, Student ID, or Mobile number.',
       };
     }
 
-    // Validate password if user supplied one (allow bypass if demo click / blank password in testing)
+    // Validate password if supplied
     if (password && password.trim().length > 0) {
+      const cleanPass = password.trim();
       const isSuperMatch =
         targetUser.role === 'super_admin' &&
-        (password === 'Tajweed26' || password === targetUser.password || password.toLowerCase() === 'tajweed26');
-      if (!isSuperMatch && targetUser.password && targetUser.password !== password) {
+        (cleanPass === 'Tajweed26' || cleanPass.toLowerCase() === 'tajweed26' || cleanPass === targetUser.password);
+
+      // Check teacher/admin initial password fallbacks in case of desync
+      const teacherObj = teachers.find(
+        (t) => t.userId === targetUser?.id || (t.email && t.email.toLowerCase() === targetUser?.email.toLowerCase())
+      );
+      const adminObj = admins.find(
+        (a) => a.userId === targetUser?.id || (a.email && a.email.toLowerCase() === targetUser?.email.toLowerCase())
+      );
+      const fallbackPassword = teacherObj?.initialPassword || (adminObj as any)?.initialPassword;
+
+      const isValidPassword =
+        isSuperMatch ||
+        targetUser.password === cleanPass ||
+        (fallbackPassword && fallbackPassword === cleanPass);
+
+      if (!isValidPassword) {
         return { success: false, message: 'Invalid password. Please check your credentials.' };
       }
     }
@@ -573,13 +649,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const changePassword = (userId: string, newPass: string): boolean => {
+    const cleanPass = newPass.trim();
+    // 1. Update in users state
     setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, password: newPass } : u))
+      prev.map((u) => (u.id === userId ? { ...u, password: cleanPass } : u))
     );
+    // 2. Update current session
     if (currentUser && currentUser.id === userId) {
-      setCurrentUser((prev) => (prev ? { ...prev, password: newPass } : null));
+      setCurrentUser((prev) => (prev ? { ...prev, password: cleanPass } : null));
     }
-    addLog('PASSWORD_CHANGED', `User ${userId} updated their password.`);
+    // 3. Sync to teacher initialPassword if teacher
+    setTeachers((prev) =>
+      prev.map((t) =>
+        t.userId === userId || (currentUser?.email && t.email.toLowerCase() === currentUser.email.toLowerCase())
+          ? { ...t, initialPassword: cleanPass }
+          : t
+      )
+    );
+    // 4. Sync to admin initialPassword if admin
+    setAdmins((prev) =>
+      prev.map((a) =>
+        a.userId === userId || (currentUser?.email && a.email.toLowerCase() === currentUser.email.toLowerCase())
+          ? { ...a, initialPassword: cleanPass }
+          : a
+      )
+    );
+    addLog('PASSWORD_CHANGED', `User ${userId} updated their password successfully.`);
     return true;
   };
 
@@ -674,13 +769,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setStudents((prev) => [newStudent, ...prev]);
     setGoogleSheets((prev) => [newSheetRow, ...prev]);
 
-    // Admin Notification
+    // Notifications for both Academic Admins and Super Admin
     addNotification({
       userId: 'admin',
       title: 'New Admission Application',
       urduTitle: 'نئی داخلہ درخواست',
       message: `${formData.fullName} applied for ${courseObj?.name || 'Tajweed'} (${formData.classType}). Student ID: ${studentId}`,
       urduMessage: `${formData.fullName} نے داخلہ درخواست جمع کروائی۔ اسٹوڈنٹ آئی ڈی: ${studentId}`,
+      type: 'info',
+    });
+
+    addNotification({
+      userId: 'super_admin',
+      title: 'New Admission Application Received',
+      urduTitle: 'نیا داخلہ فارم موصول ہوا',
+      message: `${formData.fullName} (${studentId}) submitted an admission application for ${courseObj?.name || 'Tajweed'}. Pending verification.`,
+      urduMessage: `${formData.fullName} (${studentId}) کا نیا داخلہ فارم موصول ہوا ہے۔ برائے مہربانی ایڈمشن سیکشن سے تصدیق کریں۔`,
       type: 'info',
     });
 
@@ -714,16 +818,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const student = students.find((s) => s.studentId === studentId || s.id === studentId);
     if (!student) return false;
 
-    const teacher = teachers.find((t) => t.id === teacherId);
-    const course = courses.find((c) => c.id === courseId);
     const group = groupId ? groups.find((g) => g.id === groupId) : null;
+    const effectiveTeacherId = teacherId || (group ? group.teacherId : undefined);
+    const teacher = effectiveTeacherId ? teachers.find((t) => t.id === effectiveTeacherId) : null;
+    const course = courses.find((c) => c.id === courseId);
 
     const updatedStudent: Student = {
       ...student,
-      admissionStatus: 'verified',
+      courseId: courseId || student.courseId,
       assignedCourseId: courseId,
-      assignedTeacherId: teacherId,
-      assignedGroupId: groupId,
+      admissionStatus: 'verified',
+      status: 'active',
+      classType,
+      assignedTeacherId: effectiveTeacherId,
+      assignedGroupId: classType === 'group' ? groupId : undefined,
       oneToOneSchedule: classType === 'one_to_one' && oneToOneDays && oneToOneTime ? {
         days: oneToOneDays,
         time: oneToOneTime,
@@ -733,10 +841,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setStudents((prev) => prev.map((s) => (s.id === student.id ? updatedStudent : s)));
 
-    // If assigned to a group, increment group count
+    // If assigned to a group, update group studentIds and currentStudents
     if (groupId) {
       setGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, currentStudents: g.currentStudents + 1 } : g))
+        prev.map((g) => {
+          if (g.id === groupId) {
+            const currentIds = g.studentIds || [];
+            const hasStudent = currentIds.includes(student.id) || currentIds.includes(student.studentId);
+            const nextIds = hasStudent ? currentIds : [...currentIds, student.id];
+            return {
+              ...g,
+              studentIds: nextIds,
+              currentStudents: nextIds.length,
+            };
+          }
+          return g;
+        })
+      );
+    }
+
+    // Update teacher assignedStudentIds
+    if (effectiveTeacherId) {
+      setTeachers((prev) =>
+        prev.map((t) => {
+          if (t.id === effectiveTeacherId) {
+            const currentStdIds = t.assignedStudentIds || [];
+            const hasStudent = currentStdIds.includes(student.id);
+            return {
+              ...t,
+              assignedStudentIds: hasStudent ? currentStdIds : [...currentStdIds, student.id],
+            };
+          }
+          return t;
+        })
       );
     }
 
@@ -746,7 +883,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newClass: ScheduledClass = {
       id: 'class_' + Date.now(),
       courseId,
-      teacherId,
+      teacherId: effectiveTeacherId,
       studentId: classType === 'one_to_one' ? student.id : undefined,
       groupId: classType === 'group' ? groupId : undefined,
       classType,
@@ -866,12 +1003,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       : `KT-TEA-0${teachers.length + 1}`;
 
     const effectivePassword = password || teacherData.initialPassword || 'teacher123';
+    const cleanEmail = teacherData.email.trim().toLowerCase();
 
     const newUser: User = {
       id: effectiveUserId,
       name: teacherData.fullName,
-      email: teacherData.email,
-      phone: teacherData.mobile,
+      email: cleanEmail,
+      username: cleanEmail,
+      phone: teacherData.mobile.trim(),
       password: effectivePassword,
       role: 'teacher',
       status: 'active',
@@ -884,6 +1023,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: 'teacher_' + Date.now(),
       teacherId,
       userId: effectiveUserId,
+      email: cleanEmail,
       initialPassword: effectivePassword,
     };
 
@@ -992,8 +1132,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addTeacher = (
     teacherData: Omit<Teacher, 'id' | 'teacherId' | 'userId'>,
-    password?: string
-  ): Teacher => createTeacher(teacherData, password);
+    password?: string,
+    customUserId?: string
+  ): Teacher => createTeacher(teacherData, password, customUserId);
 
   const updateStudentStatus = (studentId: string, status: 'active' | 'inactive'): boolean => {
     setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, status } : s)));
@@ -1272,12 +1413,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       : ('adm_' + Date.now());
 
     const effectivePassword = password || 'admin123';
+    const cleanEmail = email.trim().toLowerCase();
 
     const newUser: User = {
       id: effectiveUserId,
       name,
-      email,
-      phone,
+      email: cleanEmail,
+      username: cleanEmail,
+      phone: phone.trim(),
       password: effectivePassword,
       role: 'admin',
       status: 'active',
@@ -1289,8 +1432,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: adminId,
       userId: effectiveUserId,
       name,
-      email,
-      phone,
+      email: cleanEmail,
+      phone: phone.trim(),
       status: 'active',
       initialPassword: effectivePassword,
       permissions,
@@ -1503,7 +1646,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         generateStudentId,
         updateStudentStatus,
-        admissions: students.filter((s) => s.admissionStatus === 'pending'),
+        admissions: students,
         submitAdmission,
         verifyAdmission,
         rejectAdmission,

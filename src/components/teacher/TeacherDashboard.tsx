@@ -16,8 +16,10 @@ import {
   User,
   ArrowRight,
   ExternalLink,
+  KeyRound,
 } from 'lucide-react';
 import { ClassMeetModal } from '../classroom/ClassMeetModal';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 
 interface TeacherDashboardProps {
   currentTab: string;
@@ -31,6 +33,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const { currentTeacher, students, groups, courses, classes, updateClassStatus, language, t } = useApp();
 
   const [activeMeetClass, setActiveMeetClass] = useState<ScheduledClass | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   if (!currentTeacher) {
     return (
@@ -119,6 +122,34 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Security & Password Card */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-amber-600" />
+              <span>{language === 'ur' ? 'اکاؤنٹ سیکیورٹی اور پاس ورڈ' : 'Account Security & Password'}</span>
+            </h4>
+            <p className="text-xs text-slate-500 mt-1">
+              {language === 'ur'
+                ? 'آپ کسی بھی وقت اپنا پاس ورڈ تبدیل کر سکتے ہیں۔ ابتدائی پاس ورڈ سپر ایڈمن نے فراہم کیا تھا۔'
+                : 'You can change your password anytime. Initial password was provided by the Super Admin.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPasswordModal(true)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 self-start sm:self-auto"
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>{language === 'ur' ? 'پاس ورڈ تبدیل کریں' : 'Change Password'}</span>
+          </button>
+        </div>
+
+        <ChangePasswordModal
+          isOpen={showPasswordModal}
+          onClose={() => setShowPasswordModal(false)}
+        />
       </div>
     );
   }
@@ -266,10 +297,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="px-4 py-2 rounded-xl bg-emerald-600/60 text-white text-xs font-bold border border-emerald-500/40">
-            {myStudents.length} Active Students Assigned
+            {myStudents.length} {language === 'ur' ? 'طلباء تفویض ہیں' : 'Active Students Assigned'}
           </span>
+          <button
+            type="button"
+            onClick={() => setShowPasswordModal(true)}
+            className="px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold border border-white/20 flex items-center gap-1.5 transition-colors"
+            title={language === 'ur' ? 'پاس ورڈ تبدیل کریں' : 'Change Password'}
+          >
+            <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+            <span>{language === 'ur' ? 'پاس ورڈ تبدیل کریں' : 'Change Password'}</span>
+          </button>
         </div>
       </div>
 
@@ -400,6 +440,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           onClose={() => setActiveMeetClass(null)}
         />
       )}
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+      />
     </div>
   );
 };

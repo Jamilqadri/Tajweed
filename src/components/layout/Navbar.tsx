@@ -13,8 +13,10 @@ import {
   GraduationCap,
   Users,
   ChevronDown,
+  KeyRound,
 } from 'lucide-react';
 import { Role } from '../../types';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 
 interface NavbarProps {
   onOpenAdmission: () => void;
@@ -40,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const navLinks = [
     { name: t('home'), view: 'landing', href: '#home' },
@@ -183,6 +186,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 </button>
 
+                {/* Change Password Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowChangePassword(true)}
+                  className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                  title={language === 'ur' ? 'پاس ورڈ تبدیل کریں' : 'Change Password'}
+                >
+                  <KeyRound className="w-5 h-5" />
+                </button>
+
                 {/* Logout Button */}
                 <button
                   type="button"
@@ -289,6 +302,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    setShowChangePassword(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 px-4 text-center rounded-lg font-semibold border border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100 flex items-center justify-center gap-2"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span>{language === 'ur' ? 'پاس ورڈ تبدیل کریں' : 'Change Password'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     logout();
                     setMobileMenuOpen(false);
                   }}
@@ -324,6 +348,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       )}
+
+      {/* Change Password Modal for logged-in user */}
+      <ChangePasswordModal
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
     </header>
   );
 };
