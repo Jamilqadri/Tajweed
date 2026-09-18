@@ -1,0 +1,6 @@
+{
+  "name": "Kanz Ut Tajweed",
+  "description": "Online Qur’an & Tajweed Learning Management System featuring multi-role dashboards for Super Admin, Admin, Teacher, and Student with Google Meet live classes and Urdu/English bilingual support.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
