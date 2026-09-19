@@ -24,7 +24,9 @@ export const CoursesTab: React.FC = () => {
   const [urduName, setUrduName] = useState('');
   const [description, setDescription] = useState('');
   const [urduDescription, setUrduDescription] = useState('');
-  const [fee, setFee] = useState(600);
+  const [fee, setFee] = useState(500);
+  const [groupFee, setGroupFee] = useState(500);
+  const [oneToOneFee, setOneToOneFee] = useState(1000);
   const [duration, setDuration] = useState('3 Months');
   const [category, setCategory] = useState('Tajweed');
   const [classType, setClassType] = useState<ClassType | 'both'>('both');
@@ -34,7 +36,9 @@ export const CoursesTab: React.FC = () => {
     setUrduName('');
     setDescription('');
     setUrduDescription('');
-    setFee(600);
+    setFee(500);
+    setGroupFee(500);
+    setOneToOneFee(1000);
     setDuration('3 Months');
     setCategory('Tajweed');
     setClassType('both');
@@ -44,7 +48,11 @@ export const CoursesTab: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !fee) return;
+    if (!name) return;
+
+    const effGroupFee = classType === 'one_to_one' ? undefined : Number(groupFee);
+    const effOneToOneFee = classType === 'group' ? undefined : Number(oneToOneFee);
+    const baseFee = classType === 'one_to_one' ? Number(oneToOneFee) : Number(groupFee);
 
     if (editingCourse) {
       updateCourse(editingCourse.id, {
@@ -52,7 +60,9 @@ export const CoursesTab: React.FC = () => {
         urduName,
         description,
         urduDescription,
-        fee: Number(fee),
+        fee: baseFee,
+        groupFee: effGroupFee,
+        oneToOneFee: effOneToOneFee,
         duration,
         category,
         classType,
@@ -63,7 +73,9 @@ export const CoursesTab: React.FC = () => {
         urduName,
         description,
         urduDescription,
-        fee: Number(fee),
+        fee: baseFee,
+        groupFee: effGroupFee,
+        oneToOneFee: effOneToOneFee,
         duration,
         category,
         classType,
@@ -80,6 +92,8 @@ export const CoursesTab: React.FC = () => {
     setDescription(course.description);
     setUrduDescription(course.urduDescription || '');
     setFee(course.fee);
+    setGroupFee(course.groupFee ?? (course.classType !== 'one_to_one' ? course.fee : 500));
+    setOneToOneFee(course.oneToOneFee ?? (course.classType !== 'group' ? (course.fee || 1000) : 1000));
     setDuration(course.duration);
     setCategory(course.category || 'Tajweed');
     setClassType(course.classType);
@@ -162,15 +176,16 @@ export const CoursesTab: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Monthly Tuition Fee (₹) *</label>
-              <input
-                type="number"
-                required
-                min={0}
-                value={fee}
-                onChange={(e) => setFee(Number(e.target.value))}
-                className="w-full p-2.5 rounded-lg border border-slate-300 text-slate-900"
-              />
+              <label className="block font-bold text-slate-700 mb-1">Class Format Availability</label>
+              <select
+                value={classType}
+                onChange={(e) => setClassType(e.target.value as any)}
+                className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 font-semibold"
+              >
+                <option value="both">Both (Group & One-to-One)</option>
+                <option value="group">Group Classes Only</option>
+                <option value="one_to_one">One-to-One Only</option>
+              </select>
             </div>
 
             <div>
@@ -198,18 +213,61 @@ export const CoursesTab: React.FC = () => {
               </select>
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Class Format Availability</label>
-              <select
-                value={classType}
-                onChange={(e) => setClassType(e.target.value as any)}
-                className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-900"
-              >
-                <option value="both">Both (Group & One-to-One)</option>
-                <option value="group">Group Classes Only</option>
-                <option value="one_to_one">One-to-One Only</option>
-              </select>
-            </div>
+            {/* Course Fee(s) - Group Fee, One-to-One Fee, or Both */}
+            {classType === 'both' ? (
+              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-blue-50/50 rounded-xl border border-blue-100">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Group Class Fee (₹ / month) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={groupFee}
+                    onChange={(e) => setGroupFee(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 font-semibold"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">Monthly fee per student for group batches</span>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">One-to-One Fee (₹ / month) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={oneToOneFee}
+                    onChange={(e) => setOneToOneFee(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 font-semibold"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">Monthly fee for personal 1-on-1 tutoring</span>
+                </div>
+              </div>
+            ) : classType === 'group' ? (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Group Class Fee (₹ / month) *</label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={groupFee}
+                  onChange={(e) => setGroupFee(Number(e.target.value))}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-slate-900 font-semibold"
+                />
+                <span className="text-[11px] text-slate-500 mt-1 block">Monthly fee per student in group class</span>
+              </div>
+            ) : (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">One-to-One Class Fee (₹ / month) *</label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={oneToOneFee}
+                  onChange={(e) => setOneToOneFee(Number(e.target.value))}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-slate-900 font-semibold"
+                />
+                <span className="text-[11px] text-slate-500 mt-1 block">Monthly fee for individual 1-on-1 class</span>
+              </div>
+            )}
 
             <div className="sm:col-span-2">
               <label className="block font-bold text-slate-700 mb-1">Course Description (English)</label>
@@ -296,7 +354,20 @@ export const CoursesTab: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-slate-400 block">Tuition Fee</span>
-                  <span className="font-bold text-blue-900">₹{course.fee}/mo</span>
+                  {course.classType === 'both' ? (
+                    <div className="text-xs font-bold leading-tight mt-0.5 space-y-0.5">
+                      <div className="text-blue-700">Group: ₹{course.groupFee || course.fee}/mo</div>
+                      <div className="text-amber-700">1-on-1: ₹{course.oneToOneFee || (course.fee * 2)}/mo</div>
+                    </div>
+                  ) : course.classType === 'one_to_one' ? (
+                    <span className="font-bold text-amber-700">
+                      1-on-1: ₹{course.oneToOneFee || course.fee}/mo
+                    </span>
+                  ) : (
+                    <span className="font-bold text-blue-900">
+                      Group: ₹{course.groupFee || course.fee}/mo
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

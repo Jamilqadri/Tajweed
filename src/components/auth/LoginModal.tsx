@@ -109,8 +109,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 {language === 'ur'
-                  ? 'طالب علم آئی ڈی / ای میل / موبائل نمبر'
-                  : 'Student ID / Email / Mobile Number'}
+                  ? 'لاگ ان آئی ڈی (طالب علم: اسٹوڈنٹ آئی ڈی | ایڈمن و استاد: ای میل)'
+                  : 'Login ID (Students: Student ID | Admin & Teacher: Email)'}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 start-0 ps-3.5 flex items-center pointer-events-none text-slate-400">
@@ -124,8 +124,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder={
                     language === 'ur'
-                      ? 'مثلاً Tajweed25، KT26090001 یا ای میل'
-                      : 'e.g. Tajweed25, KT26090001, or email'
+                      ? 'طالب علم: 260901 | ایڈمن/استاد: ای میل ایڈریس'
+                      : 'Student: 260901 | Admin/Teacher: Email'
                   }
                   className="w-full ps-10 pe-3.5 py-3 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 shadow-xs"
                 />
@@ -156,8 +156,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <label className="text-xs font-bold text-slate-700">
                   {language === 'ur' ? 'پاس ورڈ' : 'Password'}
                 </label>
-                <span className="text-[11px] text-slate-400">
-                  {language === 'ur' ? 'طلباء: موبائل کے آخری 6 ہندسے' : 'Students: last 6 digits of phone'}
+                <span className="text-[10px] text-slate-500">
+                  {language === 'ur'
+                    ? 'طالب علم: موبائل کے آخری 6 ہندسے'
+                    : 'Student: last 6 digits of mobile'}
                 </span>
               </div>
               <div className="relative">
@@ -166,6 +168,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -179,6 +182,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {language === 'ur'
+                  ? 'طالب علم کا پاس ورڈ تبدیل کرنے تک موبائل کے آخری 6 ہندسے رہے گا۔ تبدیلی کے بعد صرف نیا پاس ورڈ کام کرے گا۔'
+                  : 'Student initial password is active until changed. After changing, only the new password works.'}
+              </p>
             </div>
 
             {/* Submit Button */}

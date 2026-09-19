@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student record including admission info, academic assignment, and contact details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "mobile": { "type": "string" },
+        "courseId": { "type": "string" },
+        "classType": { "type": "string", "enum": ["group", "one_to_one"] },
+        "admissionStatus": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "status": { "type": "string", "enum": ["active", "inactive", "pending"] },
+        "assignedTeacherId": { "type": "string" },
+        "assignedGroupId": { "type": "string" },
+        "fee": { "type": "number" },
+        "monthlyFee": { "type": "number" },
+        "feeStatus": { "type": "string", "enum": ["paid", "pending"] }
+      },
+      "required": ["id", "studentId", "fullName", "mobile"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Academy instructor record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "mobile": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "fullName", "email"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Academy curriculum course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "fee": { "type": "number" },
+        "classType": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User credential and profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["id", "name", "role"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Central collection of all enrolled students and admission applications"
+    },
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Central collection of all academy teachers"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Central collection of academy courses"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and authentication records"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Admin accounts"
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Student groups and cohorts"
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Live and scheduled online classes"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Student tuition payment history"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "System notices and alerts"
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Academy audit log"
+    }
+  }
+}

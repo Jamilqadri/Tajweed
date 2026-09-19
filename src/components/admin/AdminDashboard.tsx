@@ -58,7 +58,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const activeStudents = students.filter((s) => s.status === 'active' || s.admissionStatus === 'verified').length;
   const totalTeachers = teachers.filter((t) => t.status === 'active').length;
   const activeCourses = courses.filter((c) => c.status === 'active').length;
-  const pendingAdmissions = students.filter((s) => s.admissionStatus === 'pending').length;
+  const pendingAdmissionStudents = students.filter(
+    (s) => s.admissionStatus === 'pending' || (!s.admissionStatus && !s.assignedTeacherId)
+  );
+  const pendingAdmissions = pendingAdmissionStudents.length;
   const pendingFees = payments.filter((p) => p.status === 'pending').length;
 
   // Filter today's classes
@@ -353,6 +356,126 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {/* New Admissions Pending Verification & Teacher Assignment Table */}
+      {pendingAdmissionStudents.length > 0 && (
+        <div className="bg-white rounded-3xl border-2 border-amber-300 shadow-md p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
+                <UserCheck className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-900">New Admissions Awaiting Verification</h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                    {pendingAdmissionStudents.length} Pending
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  New student applications needing administrative verification and teacher assignment.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('admissions')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors shadow-xs"
+            >
+              <span>Go to Admissions Desk</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-start text-xs">
+              <thead className="bg-amber-50/70 text-slate-700 border-b border-amber-100 font-bold uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4 text-start">Student ID & Name</th>
+                  <th className="py-3 px-4 text-start">Course</th>
+                  <th className="py-3 px-4 text-start">Class Format</th>
+                  <th className="py-3 px-4 text-start">Fee</th>
+                  <th className="py-3 px-4 text-start">Time Preference</th>
+                  <th className="py-3 px-4 text-center">Teacher Status</th>
+                  <th className="py-3 px-4 text-end">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pendingAdmissionStudents.map((adm) => {
+                  const course = courses.find((c) => c.id === adm.courseId);
+                  const fee =
+                    adm.fee ??
+                    (adm.classType === 'group'
+                      ? (course?.groupFee || course?.fee || 500)
+                      : (course?.oneToOneFee || (course?.fee ? course.fee * 2 : 1000)));
+
+                  return (
+                    <tr key={adm.id} className="hover:bg-amber-50/30 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 font-bold flex items-center justify-center shrink-0">
+                            {adm.fullName[0]}
+                          </div>
+                          <div>
+                            <span className="font-mono font-bold text-blue-700 block text-xs">
+                              {adm.studentId}
+                            </span>
+                            <span className="font-bold text-slate-900 block">{adm.fullName}</span>
+                            <span className="text-[11px] text-slate-400">{adm.mobile}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-slate-800">{course?.name || 'Assigned Course'}</div>
+                        <div className="text-[11px] text-slate-500">Applied: {adm.admissionDate || 'Recent'}</div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            adm.classType === 'group'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {adm.classType === 'group' ? 'Group Class' : 'One-to-One'}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-bold text-slate-900">
+                        ₹{fee} <span className="text-[10px] text-slate-400 font-normal">/mo</span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-600 font-medium">
+                        {adm.preferredTime || 'Flexible'}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                          Teacher: Not Assigned
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-end">
+                        <button
+                          type="button"
+                          onClick={() => onSelectTab('admissions')}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Verify & Assign</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Today's Live Classes Table */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">

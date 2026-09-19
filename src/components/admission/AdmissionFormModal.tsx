@@ -126,6 +126,20 @@ export const AdmissionFormModal: React.FC<AdmissionFormModalProps> = ({
     }
   };
 
+  const selectedCourse = courses.find((c) => c.id === selectedCourseId) || courses[0];
+
+  const handleCourseChange = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    const crs = courses.find((c) => c.id === courseId);
+    if (crs) {
+      if (crs.classType === 'group') {
+        setClassType('group');
+      } else if (crs.classType === 'one_to_one') {
+        setClassType('one_to_one');
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   const resolvedTimeSlot =
@@ -559,7 +573,7 @@ export const AdmissionFormModal: React.FC<AdmissionFormModalProps> = ({
                   </label>
                   <select
                     value={selectedCourseId}
-                    onChange={(e) => setSelectedCourseId(e.target.value)}
+                    onChange={(e) => handleCourseChange(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 bg-white shadow-xs font-medium"
                   >
                     {courses.map((c) => (
@@ -570,22 +584,26 @@ export const AdmissionFormModal: React.FC<AdmissionFormModalProps> = ({
                   </select>
                 </div>
 
-                {/* 10. Class Type - Matches user screenshot exactly (Always side-by-side on one line) */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-2">
+                {/* 10. Class Type */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold mr-1.5">
                       10
                     </span>
                     Class Type <span className="text-red-500">*</span>
                   </label>
+
                   <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                     {/* Group Class Button */}
                     <button
                       type="button"
+                      disabled={selectedCourse?.classType === 'one_to_one'}
                       onClick={() => setClassType('group')}
                       className={`w-full text-center rounded-2xl py-2.5 px-3 sm:py-3.5 sm:px-4 transition-all cursor-pointer ${
                         classType === 'group'
                           ? 'bg-blue-600 text-white shadow-xs'
+                          : selectedCourse?.classType === 'one_to_one'
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
                           : 'bg-white text-slate-800 border border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -593,21 +611,24 @@ export const AdmissionFormModal: React.FC<AdmissionFormModalProps> = ({
                         Group Class
                       </div>
                       <div
-                        className={`text-[11px] sm:text-xs mt-0.5 ${
+                        className={`text-[10px] sm:text-[11px] mt-0.5 ${
                           classType === 'group' ? 'text-blue-100' : 'text-slate-500'
                         }`}
                       >
-                        Interactive peers
+                        {selectedCourse?.classType === 'one_to_one' ? 'Not available for this course' : 'Interactive peers (1 hr)'}
                       </div>
                     </button>
 
                     {/* One-to-One Class Button */}
                     <button
                       type="button"
+                      disabled={selectedCourse?.classType === 'group'}
                       onClick={() => setClassType('one_to_one')}
                       className={`w-full text-center rounded-2xl py-2.5 px-3 sm:py-3.5 sm:px-4 transition-all cursor-pointer ${
                         classType === 'one_to_one'
                           ? 'bg-blue-600 text-white shadow-xs'
+                          : selectedCourse?.classType === 'group'
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
                           : 'bg-white text-slate-800 border border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -615,11 +636,11 @@ export const AdmissionFormModal: React.FC<AdmissionFormModalProps> = ({
                         One-to-One Class
                       </div>
                       <div
-                        className={`text-[11px] sm:text-xs mt-0.5 ${
+                        className={`text-[10px] sm:text-[11px] mt-0.5 ${
                           classType === 'one_to_one' ? 'text-blue-100' : 'text-slate-500'
                         }`}
                       >
-                        Personal teacher
+                        {selectedCourse?.classType === 'group' ? 'Not available for this course' : 'Personal teacher (20 mins)'}
                       </div>
                     </button>
                   </div>

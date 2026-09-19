@@ -46,7 +46,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   }
 
   // Teacher specific data
-  const myStudents = students.filter((s) => s.assignedTeacherId === currentTeacher.id);
+  const myStudents = students.filter(
+    (s) =>
+      s.assignedTeacherId === currentTeacher.id ||
+      currentTeacher.assignedStudentIds?.includes(s.id) ||
+      currentTeacher.assignedStudentIds?.includes(s.studentId)
+  );
   const myGroups = groups.filter((g) => g.teacherId === currentTeacher.id);
   const myClasses = classes.filter((c) => c.teacherId === currentTeacher.id);
 

@@ -30,6 +30,7 @@ export interface User {
   phone: string;
   username?: string;
   password?: string;
+  hasChangedPassword?: boolean;
   role: Role;
   status: 'active' | 'inactive';
   avatar?: string;
@@ -38,7 +39,7 @@ export interface User {
 
 export interface Student {
   id: string;
-  studentId: string; // e.g. KT26090001
+  studentId: string; // e.g. 260901 (6 digits: YYMMSS)
   userId: string;
   fullName: string;
   fatherName: string;
@@ -67,10 +68,16 @@ export interface Student {
     time: string;
   };
   oneToOneSlot?: string;
-  status?: 'active' | 'inactive';
+  status?: 'active' | 'inactive' | 'pending';
   admissionDate?: string;
   feeStatus?: 'paid' | 'pending';
+  fee?: number;
+  monthlyFee?: number;
+  assignedTeacher?: string;
+  assignedAdminId?: string;
+  assignedAdmin?: string;
   initialPassword: string;
+  hasChangedPassword?: boolean;
   createdAt: string;
   verifiedAt?: string;
 }
@@ -106,6 +113,7 @@ export interface Teacher {
   status: 'active' | 'inactive';
   bio?: string;
   initialPassword?: string;
+  hasChangedPassword?: boolean;
   assignedStudentIds?: string[];
   assignedGroupIds?: string[];
 }
@@ -120,7 +128,9 @@ export interface AdminUser {
   mobile?: string;
   status: 'active' | 'inactive';
   initialPassword?: string;
+  hasChangedPassword?: boolean;
   permissions: AdminPermissions;
+  assignedStudentIds?: string[];
   createdAt: string;
 }
 
@@ -134,6 +144,8 @@ export interface Course {
   description: string;
   urduDescription?: string;
   fee: number; // in INR/USD e.g. 500
+  groupFee?: number; // fee for group class
+  oneToOneFee?: number; // fee for one-to-one class
   currency?: string;
   duration: string; // e.g. "3 Months"
   status: 'active' | 'inactive';

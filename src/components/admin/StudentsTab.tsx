@@ -15,7 +15,9 @@ import {
   Clock,
   X,
   CreditCard,
+  Trash2,
 } from 'lucide-react';
+import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
 
 export const StudentsTab: React.FC = () => {
   const { students, courses, teachers, groups, updateStudentStatus } = useApp();
@@ -23,6 +25,7 @@ export const StudentsTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
 
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
@@ -154,7 +157,9 @@ export const StudentsTab: React.FC = () => {
                             <span className="font-semibold text-slate-800">{teacher.fullName}</span>
                           </div>
                         ) : (
-                          <span className="text-slate-400 italic">Unassigned</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                            Teacher: Not Assigned
+                          </span>
                         )}
                       </td>
 
@@ -200,14 +205,24 @@ export const StudentsTab: React.FC = () => {
                       </td>
 
                       <td className="py-3.5 px-4 text-end">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStudent(student)}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="View Profile Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedStudent(student)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View Profile Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingStudent(student)}
+                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Student"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -269,12 +284,62 @@ export const StudentsTab: React.FC = () => {
                 </div>
               </div>
 
+              <div className="p-4 rounded-xl bg-purple-50/80 border border-purple-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-950 text-sm">Student Portal Login Credentials</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                    {selectedStudent.hasChangedPassword ? 'Custom Password' : 'Initial Password Active'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-700 text-xs">
+                  <div>
+                    <span className="text-slate-500 block">Login Student ID:</span>
+                    <span className="font-mono font-bold text-purple-900 bg-white px-2 py-0.5 rounded border border-purple-200 inline-block">
+                      {selectedStudent.studentId}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Password:</span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-purple-200 inline-block">
+                      {selectedStudent.hasChangedPassword
+                        ? '•••••••• (Changed by Student)'
+                        : selectedStudent.mobile.replace(/\D/g, '').slice(-6) || '123456'}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  ابتدائی پاسورڈ موبائل کے آخری 6 ہندسے ہے۔ طالب علم کے تبدیل کرنے کے بعد صرف نیا پاسورڈ کام کرے گا۔
+                </p>
+              </div>
+
               <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
-                <div className="font-bold text-blue-900 text-sm">Academic Details</div>
+                <div className="font-bold text-blue-900 text-sm">Academic & Fee Details</div>
                 <div className="grid grid-cols-2 gap-2 text-slate-700">
                   <div>
                     <span className="text-slate-500 block">Class Type:</span>
                     <span className="font-bold capitalize">{selectedStudent.classType.replace('_', ' ')}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Assigned Teacher:</span>
+                    {teachers.find((t) => t.id === selectedStudent.assignedTeacherId) ? (
+                      <span className="font-bold text-slate-900">
+                        {teachers.find((t) => t.id === selectedStudent.assignedTeacherId)?.fullName}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
+                        Teacher: Not Assigned
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Monthly Tuition Fee:</span>
+                    <span className="font-bold text-blue-900">
+                      ₹{selectedStudent.fee || selectedStudent.monthlyFee || (selectedStudent.classType === 'group' ? 500 : 1000)} / mo
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Fee Status:</span>
+                    <span className="font-bold uppercase text-emerald-700">{selectedStudent.feeStatus}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block">Preferred Time:</span>
@@ -284,15 +349,24 @@ export const StudentsTab: React.FC = () => {
                     <span className="text-slate-500 block">Admission Date:</span>
                     <span className="font-bold">{selectedStudent.admissionDate}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 block">Fee Status:</span>
-                    <span className="font-bold uppercase text-emerald-700">{selectedStudent.feeStatus}</span>
-                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const s = selectedStudent;
+                  setSelectedStudent(null);
+                  setDeletingStudent(s);
+                }}
+                className="px-3.5 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-semibold text-xs flex items-center gap-1.5 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Student</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setSelectedStudent(null)}
@@ -304,6 +378,14 @@ export const StudentsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Super Admin Delete Modal for Student */}
+      <SuperAdminDeleteModal
+        isOpen={!!deletingStudent}
+        onClose={() => setDeletingStudent(null)}
+        entityType="student"
+        entity={deletingStudent}
+      />
     </div>
   );
 };

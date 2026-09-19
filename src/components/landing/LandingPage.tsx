@@ -159,7 +159,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <div className="text-xs">
                       <span className="font-bold text-slate-900 block">Automatic Student ID</span>
-                      <span className="text-slate-500">e.g. KT26090001 with instant credentials</span>
+                      <span className="text-slate-500">e.g. 260901 with instant credentials</span>
                     </div>
                   </div>
 
