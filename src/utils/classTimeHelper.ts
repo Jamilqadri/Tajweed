@@ -1,18 +1,22 @@
 import { ScheduledClass } from '../types';
 
 export interface ClassJoinStatus {
-  isAvailable: boolean;
+  isAvailable: boolean; // For students: clickable 5m before start OR immediately if teacher has joined
   statusText: string;
   statusTextUrdu: string;
   badgeType: 'active' | 'upcoming' | 'past';
   formattedTimeDisplay: string;
   minutesUntilStart?: number;
+  teacherJoined: boolean;
+  canTeacherJoinAlways: boolean; // Teacher has no time restriction and can join anytime
+  canAdminJoinAlways: boolean; // Admin has no time restriction and can join anytime
 }
 
 /**
- * Calculates whether a class is currently joinable (within 5 minutes before start time until the end time),
- * and provides clear bilingual status and timing text.
- * Always keeps the "Join Class" button accessible and informative as requested by the user.
+ * Calculates whether a class is currently joinable:
+ * - Admin & Teacher: ALWAYS visible and can join ANYTIME without time restrictions (both Group and 1-on-1).
+ * - Students: button becomes clickable only 5 minutes before scheduled class time.
+ *             However, if the Teacher joins/starts before that time, the button becomes IMMEDIATELY clickable!
  */
 export function getClassJoinStatus(
   cls: ScheduledClass,
@@ -23,6 +27,8 @@ export function getClassJoinStatus(
     ? `${cls.time || cls.startTime} - ${cls.endTime}`
     : `${cls.time || cls.startTime} (${cls.durationMinutes || 45} mins)`;
 
+  const teacherJoined = Boolean(cls.teacherJoined || cls.status === 'live');
+
   if (cls.status === 'completed') {
     return {
       isAvailable: false,
@@ -30,16 +36,24 @@ export function getClassJoinStatus(
       statusTextUrdu: 'کلاس مکمل ہو چکی ہے',
       badgeType: 'past',
       formattedTimeDisplay,
+      teacherJoined: false,
+      canTeacherJoinAlways: true,
+      canAdminJoinAlways: true,
     };
   }
 
-  if (cls.status === 'live') {
+  // CRITICAL RULE: If Teacher has joined the class, the Student's Join Class button
+  // becomes IMMEDIATELY clickable regardless of scheduled time!
+  if (teacherJoined) {
     return {
       isAvailable: true,
-      statusText: 'Live Now — Join Class',
-      statusTextUrdu: 'کلاس جاری ہے — ابھی شامل ہوں',
+      statusText: 'Teacher Joined — Join Live Class Now',
+      statusTextUrdu: 'استاد محترم کلاس میں تشریف لا چکے ہیں — ابھی شامل ہوں',
       badgeType: 'active',
       formattedTimeDisplay,
+      teacherJoined: true,
+      canTeacherJoinAlways: true,
+      canAdminJoinAlways: true,
     };
   }
 
@@ -51,7 +65,6 @@ export function getClassJoinStatus(
   const now = overrideNow || new Date();
 
   // Create date object for class start
-  // Support both YYYY-MM-DD and today's date
   const classDate = new Date();
   if (cls.date) {
     const parts = cls.date.split('-');
@@ -80,16 +93,22 @@ export function getClassJoinStatus(
         statusTextUrdu: 'کلاس کا وقت ہو گیا ہے — ویڈیو کلاس میں شامل ہوں',
         badgeType: 'active',
         formattedTimeDisplay,
+        teacherJoined: false,
+        canTeacherJoinAlways: true,
+        canAdminJoinAlways: true,
       };
     } else if (nowMs < joinWindowOpenMs) {
       const minsDiff = Math.ceil((classStartTimeMs - nowMs) / (1000 * 60));
       return {
         isAvailable: false,
-        statusText: `Starts at ${classTime} (Join opens 5m prior)`,
-        statusTextUrdu: `کلاس کا وقت: ${classTime} (5 منٹ قبل لنک فعال ہوگا)`,
+        statusText: `Starts at ${classTime} (Activates 5m prior or when teacher joins)`,
+        statusTextUrdu: `بوقت ${classTime} (5 منٹ قبل یا استاد کے آنے پر فعال ہوگا)`,
         badgeType: 'upcoming',
         formattedTimeDisplay,
         minutesUntilStart: minsDiff,
+        teacherJoined: false,
+        canTeacherJoinAlways: true,
+        canAdminJoinAlways: true,
       };
     } else {
       return {
@@ -98,6 +117,9 @@ export function getClassJoinStatus(
         statusTextUrdu: `آج کی کلاس کا وقت ختم ہو چکا ہے`,
         badgeType: 'past',
         formattedTimeDisplay,
+        teacherJoined: false,
+        canTeacherJoinAlways: true,
+        canAdminJoinAlways: true,
       };
     }
   }
@@ -105,9 +127,12 @@ export function getClassJoinStatus(
   // Future scheduled class:
   return {
     isAvailable: false,
-    statusText: `Scheduled: ${cls.date} at ${classTime}`,
-    statusTextUrdu: `مقررہ تاریخ: ${cls.date} بوقت ${classTime}`,
+    statusText: `Scheduled: ${cls.date} at ${classTime} (Opens 5m prior or when teacher joins)`,
+    statusTextUrdu: `مقررہ تاریخ: ${cls.date} بوقت ${classTime} (5 منٹ قبل یا استاد کے آنے پر فعال ہوگا)`,
     badgeType: 'upcoming',
     formattedTimeDisplay,
+    teacherJoined: false,
+    canTeacherJoinAlways: true,
+    canAdminJoinAlways: true,
   };
 }

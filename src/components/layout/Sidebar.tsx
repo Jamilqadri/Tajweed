@@ -18,6 +18,7 @@ import {
   Clock,
   X,
 } from 'lucide-react';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 
 interface SidebarProps {
   currentTab: string;
@@ -32,7 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
 }) => {
-  const { currentRole, currentUser, currentAdmin, logout, t, language } = useApp();
+  const { currentRole, currentUser, currentAdmin, currentTeacher, logout, t, language } = useApp();
 
   // Determine which navigation items to show based on role & permissions
   const getNavItems = () => {
@@ -119,14 +120,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div>
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img
-              src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-              alt={currentUser?.name}
-              className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-xs"
-            />
+            <div className="relative shrink-0">
+              <img
+                src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                alt={currentUser?.name}
+                className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-xs"
+              />
+              {currentRole === 'teacher' && (
+                <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
+                  <TeacherGenderIcon
+                    gender={currentTeacher?.gender}
+                    teacherName={currentUser?.name}
+                    size={14}
+                  />
+                </div>
+              )}
+            </div>
             <div className="overflow-hidden">
-              <div className="font-bold text-sm text-slate-900 truncate">
-                {currentUser?.name}
+              <div className="font-bold text-sm text-slate-900 truncate flex items-center gap-1.5">
+                <span>{currentUser?.name}</span>
+                {currentRole === 'teacher' && (
+                  <TeacherGenderIcon
+                    gender={currentTeacher?.gender}
+                    teacherName={currentUser?.name}
+                    variant="badge"
+                    size={11}
+                  />
+                )}
               </div>
               <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">
                 {currentRole?.replace('_', ' ')}

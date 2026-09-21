@@ -16,7 +16,10 @@ import {
   Check,
   ExternalLink,
 } from 'lucide-react';
-import { ClassMeetModal } from '../classroom/ClassMeetModal';
+import { GoogleMeetLauncherModal } from '../classroom/GoogleMeetLauncherModal';
+import { GoogleMeetSettingsCard } from './GoogleMeetSettingsCard';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
+import { isRealGoogleMeetLink } from '../../lib/googleMeetService';
 
 export const ClassesTab: React.FC = () => {
   const {
@@ -27,11 +30,18 @@ export const ClassesTab: React.FC = () => {
     groups,
     scheduleClass,
     updateClassStatus,
+    joinLiveClass,
     checkTeacherConflict,
   } = useApp();
 
   const [isCreating, setIsCreating] = useState(false);
   const [activeMeetClass, setActiveMeetClass] = useState<ScheduledClass | null>(null);
+  const [filterType, setFilterType] = useState<'all' | 'group' | 'one_to_one'>('all');
+
+  // Opens Google Meet summary & launcher modal
+  const handleAdminJoinClass = (cls: ScheduledClass) => {
+    setActiveMeetClass(cls);
+  };
 
   // Form State
   const [courseId, setCourseId] = useState(courses[0]?.id || '');
@@ -43,6 +53,14 @@ export const ClassesTab: React.FC = () => {
   const [time, setTime] = useState('19:00');
   const [durationMinutes, setDurationMinutes] = useState(45);
   const [conflictError, setConflictError] = useState<string | null>(null);
+
+  const filteredClasses = classes.filter((c) => {
+    if (filterType === 'all') return true;
+    return c.classType === filterType;
+  });
+
+  const groupClassesCount = classes.filter((c) => c.classType === 'group').length;
+  const oneToOneClassesCount = classes.filter((c) => c.classType === 'one_to_one').length;
 
   const resetForm = () => {
     setIsCreating(false);
@@ -85,6 +103,9 @@ export const ClassesTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Google Meet & Calendar Integration Panel */}
+      <GoogleMeetSettingsCard />
+
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -274,6 +295,63 @@ export const ClassesTab: React.FC = () => {
         </form>
       )}
 
+      {/* Access Rule Banner */}
+      <div className="bg-gradient-to-r from-blue-900 to-indigo-950 rounded-2xl p-4 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-blue-600/50 flex items-center justify-center shrink-0 border border-blue-400/30">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div>
+            <div className="font-bold text-sm text-white flex items-center gap-2">
+              <span>Admin Class Access: Unrestricted</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Join Anytime
+              </span>
+            </div>
+            <p className="text-blue-200 text-[11px] mt-0.5">
+              Both Group Classes and One-to-One Classes are always visible. Admins and Teachers can join sessions at any time without time restrictions.
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1.5 bg-white/10 p-1 rounded-xl border border-white/15 self-start sm:self-center shrink-0">
+          <button
+            type="button"
+            onClick={() => setFilterType('all')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+              filterType === 'all'
+                ? 'bg-white text-blue-950 shadow-xs'
+                : 'text-blue-200 hover:text-white'
+            }`}
+          >
+            All Classes ({classes.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('group')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+              filterType === 'group'
+                ? 'bg-white text-blue-950 shadow-xs'
+                : 'text-blue-200 hover:text-white'
+            }`}
+          >
+            Group Classes ({groupClassesCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('one_to_one')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+              filterType === 'one_to_one'
+                ? 'bg-white text-blue-950 shadow-xs'
+                : 'text-blue-200 hover:text-white'
+            }`}
+          >
+            One-to-One ({oneToOneClassesCount})
+          </button>
+        </div>
+      </div>
+
       {/* Classes Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -289,49 +367,90 @@ export const ClassesTab: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {classes.map((cls) => {
-                const course = courses.find((c) => c.id === cls.courseId);
-                const teacher = teachers.find((t) => t.id === cls.teacherId);
-                const group = cls.groupId ? groups.find((g) => g.id === cls.groupId) : null;
-                const student = cls.studentId ? students.find((s) => s.id === cls.studentId) : null;
+              {filteredClasses.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    No classes found matching the selected filter.
+                  </td>
+                </tr>
+              ) : (
+                filteredClasses.map((cls) => {
+                  const course = courses.find((c) => c.id === cls.courseId);
+                  const teacher = teachers.find((t) => t.id === cls.teacherId);
+                  const group = cls.groupId ? groups.find((g) => g.id === cls.groupId) : null;
+                  const student = cls.studentId ? students.find((s) => s.id === cls.studentId) : null;
 
-                return (
-                  <tr key={cls.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900">{course?.name}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                          {cls.classType === 'group' ? 'Group Class' : '1-on-1'}
-                        </span>
-                        <span className="text-slate-600 font-medium">
-                          {cls.classType === 'group' ? group?.name : student?.fullName}
-                        </span>
-                      </div>
-                    </td>
+                  return (
+                    <tr key={cls.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-900">{course?.name}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            {cls.classType === 'group' ? 'Group Class' : '1-on-1'}
+                          </span>
+                          <span className="text-slate-600 font-medium">
+                            {cls.classType === 'group' ? group?.name : student?.fullName}
+                          </span>
+                        </div>
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      <div className="font-semibold text-slate-800">{teacher?.fullName}</div>
-                      <div className="text-[11px] text-slate-400">{teacher?.specialization}</div>
-                    </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <TeacherGenderIcon
+                            gender={teacher?.gender}
+                            teacherName={teacher?.fullName}
+                            size={14}
+                          />
+                          <div className="font-semibold text-slate-800">{teacher?.fullName}</div>
+                        </div>
+                        <div className="text-[11px] text-slate-400">{teacher?.specialization}</div>
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900">{cls.date}</div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-blue-600" />
-                        <span>{cls.time} ({cls.durationMinutes} mins)</span>
-                      </div>
-                    </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-900">{cls.date}</div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-blue-600" />
+                          <span>{cls.time} ({cls.durationMinutes} mins)</span>
+                        </div>
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      <button
-                        type="button"
-                        onClick={() => setActiveMeetClass(cls)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs border border-blue-200 transition-colors"
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                        <span>Join Live Room</span>
-                      </button>
-                    </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-col gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAdminJoinClass(cls)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors"
+                            title="Admin Access: You can join this Google Meet live room anytime."
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            <span>Join Google Meet</span>
+                          </button>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
+                            {isRealGoogleMeetLink(cls.meetLink) ? (
+                              <>
+                                <span className="truncate max-w-[110px] text-slate-700 font-semibold">
+                                  {cls.meetLink.replace('https://meet.google.com/', '')}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(cls.meetLink);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 underline text-[10px] font-sans font-bold"
+                                  title="Copy Google Meet Link"
+                                >
+                                  Copy
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-sans italic">
+                                Created on launch
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
 
                     <td className="py-3.5 px-4 text-center">
                       <span
@@ -385,15 +504,16 @@ export const ClassesTab: React.FC = () => {
                     </td>
                   </tr>
                 );
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Classroom Modal */}
+      {/* Google Meet Classroom Modal */}
       {activeMeetClass && (
-        <ClassMeetModal
+        <GoogleMeetLauncherModal
           classItem={activeMeetClass}
           onClose={() => setActiveMeetClass(null)}
         />

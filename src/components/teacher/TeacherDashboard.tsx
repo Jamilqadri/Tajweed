@@ -18,8 +18,9 @@ import {
   ExternalLink,
   KeyRound,
 } from 'lucide-react';
-import { ClassMeetModal } from '../classroom/ClassMeetModal';
+import { GoogleMeetLauncherModal } from '../classroom/GoogleMeetLauncherModal';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 
 interface TeacherDashboardProps {
   currentTab: string;
@@ -30,10 +31,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   currentTab,
   onSelectTab,
 }) => {
-  const { currentTeacher, students, groups, courses, classes, updateClassStatus, language, t } = useApp();
+  const {
+    currentTeacher,
+    students,
+    groups,
+    courses,
+    classes,
+    updateClassStatus,
+    joinLiveClass,
+    language,
+    t,
+  } = useApp();
 
   const [activeMeetClass, setActiveMeetClass] = useState<ScheduledClass | null>(null);
+
+  // Opens Google Meet summary & launcher modal
+  const handleTeacherJoinClass = (cls: ScheduledClass) => {
+    setActiveMeetClass(cls);
+  };
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'group' | 'one_to_one'>('all');
+  const [scheduleScope, setScheduleScope] = useState<'today' | 'all'>('today');
 
   if (!currentTeacher) {
     return (
@@ -53,12 +71,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       currentTeacher.assignedStudentIds?.includes(s.studentId)
   );
   const myGroups = groups.filter((g) => g.teacherId === currentTeacher.id);
-  const myClasses = classes.filter((c) => c.teacherId === currentTeacher.id);
+  const myClasses = classes.filter(
+    (c) => c.teacherId === currentTeacher.id || (c.groupId && myGroups.some((g) => g.id === c.groupId))
+  );
+
+  const groupClasses = myClasses.filter((c) => c.classType === 'group');
+  const oneToOneClasses = myClasses.filter((c) => c.classType === 'one_to_one');
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todaysClasses = myClasses.filter((c) => c.date === todayStr || c.date === '2026-09-18' || c.status === 'live');
   const upcomingClasses = myClasses.filter((c) => c.status === 'scheduled' && !todaysClasses.some((tc) => tc.id === c.id));
   const completedClasses = myClasses.filter((c) => c.status === 'completed');
+
+  const displayedClasses = myClasses.filter((c) => {
+    if (scheduleScope === 'today' && c.date !== todayStr && c.date !== '2026-09-18' && c.status !== 'live') return false;
+    if (scheduleFilter === 'group' && c.classType !== 'group') return false;
+    if (scheduleFilter === 'one_to_one' && c.classType !== 'one_to_one') return false;
+    return true;
+  });
 
   // SUB-VIEW: My Profile
   if (currentTab === 'my_profile') {
@@ -272,17 +302,224 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     );
   }
 
+  // SUB-VIEW: My Schedule (Group & One-to-One Classes with unrestricted access)
+  if (currentTab === 'my_schedule') {
+    return (
+      <div className="space-y-6">
+        {/* Header & Access Banner */}
+        <div className="bg-gradient-to-r from-emerald-900 via-teal-950 to-blue-950 rounded-3xl p-6 sm:p-8 text-white shadow-lg space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-6 h-6 text-emerald-400" />
+                <h3 className="text-2xl font-bold">
+                  {language === 'ur' ? 'میرے کلاس شیڈول (گروپ اور ون ٹو ون)' : 'My Class Schedule (Group & One-to-One)'}
+                </h3>
+              </div>
+              <p className="text-emerald-200 text-xs mt-1">
+                {language === 'ur'
+                  ? 'گروپ اور ون ٹو ون کلاسز ہمیشہ دستیاب ہیں۔ استاد کسی بھی وقت کلاس شروع کر سکتے ہیں۔'
+                  : 'Group Classes and One-to-One Classes are always visible. You can start or join sessions anytime without time restrictions.'}
+              </p>
+            </div>
+
+            <div className="px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold self-start sm:self-center">
+              ✓ Unrestricted Join Access
+            </div>
+          </div>
+
+          {/* Student Notification Guarantee Banner */}
+          <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/15 text-xs text-blue-100 flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-white">
+                {language === 'ur' ? 'طلباء کے لیے فوری رسائی:' : 'Student Instant Access Guarantee:'}
+              </span>
+              <span className="block mt-0.5 text-blue-200">
+                {language === 'ur'
+                  ? 'اگر آپ مقررہ وقت سے پہلے کلاس میں شامل ہوتے ہیں، تو متعلقہ طالب علم کا "Join Class" بٹن فوری طور پر فعال ہو جاتا ہے۔'
+                  : 'When you start or join any class before the scheduled time, the relevant student’s Join Class button becomes immediately active and clickable.'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Toolbar */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Scope Toggle: Today vs All */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setScheduleScope('today')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  scheduleScope === 'today' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {language === 'ur' ? `آج کے سیشنز (${todaysClasses.length})` : `Today's Sessions (${todaysClasses.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleScope('all')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  scheduleScope === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {language === 'ur' ? `تمام شیڈول (${myClasses.length})` : `All Scheduled (${myClasses.length})`}
+              </button>
+            </div>
+
+            {/* Type Filter */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('all')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                  scheduleFilter === 'all' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All ({myClasses.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('group')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                  scheduleFilter === 'group' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Group ({groupClasses.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('one_to_one')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                  scheduleFilter === 'one_to_one' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                One-to-One ({oneToOneClasses.length})
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Schedule List */}
+        <div className="space-y-3">
+          {displayedClasses.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs bg-white rounded-2xl border border-slate-200">
+              No classes found for the selected schedule filters.
+            </div>
+          ) : (
+            displayedClasses.map((cls) => {
+              const course = courses.find((c) => c.id === cls.courseId);
+              const group = cls.groupId ? groups.find((g) => g.id === cls.groupId) : null;
+              const student = cls.studentId ? students.find((s) => s.id === cls.studentId) : null;
+              const joinStatus = getClassJoinStatus(cls);
+
+              return (
+                <div
+                  key={cls.id}
+                  className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        {cls.classType === 'group' ? 'Group Class' : 'One-to-One'}
+                      </span>
+                      <h4 className="font-bold text-base text-slate-900">
+                        {cls.classType === 'group' ? group?.name : student?.fullName}
+                      </h4>
+                    </div>
+
+                    <div className="text-xs text-slate-600 flex flex-wrap items-center gap-3">
+                      <span><strong>Course:</strong> {course?.name}</span>
+                      <span>•</span>
+                      <span className="font-medium text-slate-700"><strong>Date:</strong> {cls.date}</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1.5 font-extrabold text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                        <Clock className="w-3.5 h-3.5 text-blue-600" />
+                        {joinStatus.formattedTimeDisplay}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${cls.status === 'live' || cls.teacherJoined ? 'bg-emerald-500 animate-ping' : 'bg-emerald-500'}`} />
+                      <span className="font-semibold text-[11px] text-emerald-800">
+                        {cls.status === 'live' || cls.teacherJoined
+                          ? 'Class Active • Live in Session'
+                          : 'Teacher Access: Join anytime (No time restriction)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleTeacherJoinClass(cls)}
+                      className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 ${
+                        cls.status === 'live' || cls.teacherJoined
+                          ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 ring-2 ring-emerald-200 animate-pulse'
+                          : 'bg-emerald-700 hover:bg-emerald-800 shadow-emerald-600/30 ring-2 ring-emerald-300'
+                      }`}
+                      title="Teachers can join and start the live class anytime without any time restriction."
+                    >
+                      <Video className="w-4 h-4" />
+                      <span>
+                        {cls.status === 'live' || cls.teacherJoined
+                          ? language === 'ur'
+                            ? 'جاری کلاس میں شامل رہیں'
+                            : 'Rejoin Live Class'
+                          : language === 'ur'
+                          ? 'لائیو ویڈیو کلاس شروع کریں (کسی بھی وقت)'
+                          : 'Start Live Video Class (Anytime)'}
+                      </span>
+                    </button>
+
+                    {cls.status === 'live' && (
+                      <button
+                        type="button"
+                        onClick={() => updateClassStatus(cls.id, 'completed')}
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
+                      >
+                        Finish Class
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {activeMeetClass && (
+          <GoogleMeetLauncherModal
+            classItem={activeMeetClass}
+            onClose={() => setActiveMeetClass(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   // DEFAULT VIEW: Overview Dashboard & Today's Classes
   return (
     <div className="space-y-8">
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-emerald-800 via-teal-900 to-blue-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <img
-            src={currentTeacher.profilePhoto}
-            alt={currentTeacher.fullName}
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-400 shadow-md"
-          />
+          <div className="relative shrink-0">
+            <img
+              src={currentTeacher.profilePhoto}
+              alt={currentTeacher.fullName}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-400 shadow-md"
+            />
+            <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
+              <TeacherGenderIcon
+                gender={currentTeacher.gender}
+                teacherName={currentTeacher.fullName}
+                size={18}
+              />
+            </div>
+          </div>
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 text-xs font-semibold mb-1 border border-emerald-400/30">
               <Sparkles className="w-3.5 h-3.5" />
@@ -292,9 +529,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <span className="block text-sm sm:text-base font-medium text-emerald-200 tracking-wide">
                 Assalamu Alaikum
               </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                {currentTeacher.fullName}
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                  {currentTeacher.fullName}
+                </h2>
+                <TeacherGenderIcon
+                  gender={currentTeacher.gender}
+                  teacherName={currentTeacher.fullName}
+                  variant="badge"
+                  size={15}
+                />
+              </div>
             </div>
             <p className="text-xs sm:text-sm text-emerald-100">
               {currentTeacher.specialization} • Sanad Muttasil Certified
@@ -351,24 +596,88 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       </div>
 
-      {/* Today's Classes List with Video Class Button */}
+      {/* Today's & All Scheduled Classes List with Video Class Button */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">{t('todaysClasses')}</h3>
-            <p className="text-xs text-slate-500">
-              Live sessions scheduled for today ({todayStr}). Classes unlock 5 minutes prior to start time.
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900">
+                {language === 'ur' ? 'کلاس سیشنز اور لائیو روم' : 'Class Sessions & Live Desk'}
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Join Anytime (No Time Restrictions)
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {language === 'ur'
+                ? 'گروپ اور ون ٹو ون کلاسز ہمیشہ نظر آتی ہیں۔ استاد کسی بھی وقت لائیو روم شروع کر سکتے ہیں۔'
+                : 'Both Group Classes and One-to-One Classes are always visible. Joining early immediately unlocks the session for students.'}
             </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Scope Toggle: Today vs All */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setScheduleScope('today')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                  scheduleScope === 'today' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Today ({todaysClasses.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleScope('all')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                  scheduleScope === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                All Classes ({myClasses.length})
+              </button>
+            </div>
+
+            {/* Type Filter */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('all')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  scheduleFilter === 'all' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('group')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  scheduleFilter === 'group' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Group
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('one_to_one')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  scheduleFilter === 'one_to_one' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                1-on-1
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          {todaysClasses.length === 0 ? (
+          {displayedClasses.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl">
-              No classes scheduled for today.
+              No classes scheduled for the selected view.
             </div>
           ) : (
-            todaysClasses.map((cls) => {
+            displayedClasses.map((cls) => {
               const course = courses.find((c) => c.id === cls.courseId);
               const group = cls.groupId ? groups.find((g) => g.id === cls.groupId) : null;
               const student = cls.studentId ? students.find((s) => s.id === cls.studentId) : null;
@@ -377,7 +686,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               return (
                 <div
                   key={cls.id}
-                  className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+                  className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
@@ -392,16 +701,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <div className="text-xs text-slate-600 flex flex-wrap items-center gap-3">
                       <span><strong>Course:</strong> {course?.name}</span>
                       <span>•</span>
+                      <span className="text-slate-700 font-medium"><strong>Date:</strong> {cls.date}</span>
+                      <span>•</span>
                       <span className="flex items-center gap-1.5 font-extrabold text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
                         <Clock className="w-3.5 h-3.5 text-blue-600" />
                         {joinStatus.formattedTimeDisplay}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <span className={`w-2 h-2 rounded-full ${joinStatus.isAvailable ? 'bg-emerald-500 animate-ping' : 'bg-amber-400'}`} />
-                      <span className="font-medium text-[11px] text-slate-600">
-                        {joinStatus.statusText}
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${cls.status === 'live' || cls.teacherJoined ? 'bg-emerald-500 animate-ping' : 'bg-emerald-500'}`} />
+                      <span className="font-semibold text-[11px] text-slate-700">
+                        {cls.status === 'live' || cls.teacherJoined ? (
+                          <span className="text-emerald-700 font-bold">
+                            {language === 'ur' ? 'کلاس جاری ہے • لائیو روم فعال' : 'Class Active • Teacher Joined Early'}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 font-medium">
+                            {language === 'ur' ? 'استاد کے لیے کوئی وقت کی پابندی نہیں (کسی بھی وقت شروع کریں)' : 'Teacher Access: Join anytime (Student access unlocks immediately when you join)'}
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -409,16 +728,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setActiveMeetClass(cls)}
+                      onClick={() => handleTeacherJoinClass(cls)}
                       className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 ${
-                        joinStatus.isAvailable
-                          ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 ring-2 ring-blue-200'
-                          : 'bg-slate-900 hover:bg-black shadow-slate-900/20'
+                        cls.status === 'live' || cls.teacherJoined
+                          ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 ring-2 ring-emerald-200 animate-pulse'
+                          : 'bg-emerald-700 hover:bg-emerald-800 shadow-emerald-600/30 ring-2 ring-emerald-300'
                       }`}
-                      title="Start In-App Live Classroom with real Video, Audio, Whiteboard & Quran Reader"
+                      title="Teachers can join and start the live class anytime without any time restriction."
                     >
                       <Video className="w-4 h-4" />
-                      <span>{language === 'ur' ? 'لائیو ویڈیو کلاس شروع کریں' : 'Start Live Video Class'}</span>
+                      <span>
+                        {cls.status === 'live' || cls.teacherJoined
+                          ? language === 'ur'
+                            ? 'جاری کلاس میں شامل رہیں'
+                            : 'Rejoin Live Class'
+                          : language === 'ur'
+                          ? 'لائیو ویڈیو کلاس شروع کریں (کسی بھی وقت)'
+                          : 'Start Live Video Class (Anytime)'}
+                      </span>
                     </button>
 
                     {cls.status === 'live' && (
@@ -438,9 +765,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       </div>
 
-      {/* Classroom Modal */}
+      {/* Google Meet Classroom Modal */}
       {activeMeetClass && (
-        <ClassMeetModal
+        <GoogleMeetLauncherModal
           classItem={activeMeetClass}
           onClose={() => setActiveMeetClass(null)}
         />

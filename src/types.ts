@@ -78,6 +78,7 @@ export interface Student {
   assignedAdmin?: string;
   initialPassword: string;
   hasChangedPassword?: boolean;
+  meetLink?: string;
   createdAt: string;
   verifiedAt?: string;
 }
@@ -172,6 +173,16 @@ export interface Group {
   meetLink: string;
 }
 
+export interface ClassParticipant {
+  id: string; // studentId or teacherId or userId
+  name: string;
+  role: 'student' | 'teacher' | 'admin';
+  audioOn: boolean;
+  videoOn: boolean;
+  handRaised?: boolean;
+  joinedAt: string; // ISO timestamp
+}
+
 export interface ScheduledClass {
   id: string;
   courseId: string;
@@ -188,6 +199,11 @@ export interface ScheduledClass {
   status: ClassStatus;
   topic?: string;
   notes?: string;
+  teacherJoined?: boolean;
+  teacherJoinedAt?: string;
+  participants?: ClassParticipant[];
+  googleMeetCode?: string;
+  googleCalendarEventId?: string;
 }
 
 export interface TeacherSlot {

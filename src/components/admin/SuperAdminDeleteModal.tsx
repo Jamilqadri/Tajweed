@@ -214,17 +214,17 @@ export const SuperAdminDeleteModal: React.FC<SuperAdminDeleteModalProps> = ({
     }
   };
 
-  const handleFinalDelete = () => {
+  const handleFinalDelete = async () => {
     if (!canDeleteProceed || !isConfirmationWordValid) return;
     setIsDeleting(true);
 
     try {
       if (entityType === 'teacher') {
-        deleteTeacher(entity.id);
+        await deleteTeacher(entity.id);
       } else if (entityType === 'admin') {
-        deleteAdmin(entity.id);
+        await deleteAdmin(entity.id);
       } else if (entityType === 'student') {
-        deleteStudent(entity.id);
+        await deleteStudent(entity.id);
       }
 
       if (onSuccess) onSuccess();

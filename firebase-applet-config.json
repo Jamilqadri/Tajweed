@@ -1,12 +1,12 @@
 {
-  "projectId": "primordial-xyston-hggh3",
-  "appId": "1:609815261708:web:a14f5462c7f5767b0b3429",
-  "apiKey": "AIzaSyD0yfuxIWx8np0FEFOQAaoha62K3QHzsyc",
-  "authDomain": "primordial-xyston-hggh3.firebaseapp.com",
+  "projectId": "gen-lang-client-0432212767",
+  "appId": "1:432489761035:web:d1230f17c1dfee0d407a0e",
+  "apiKey": "AIzaSyAsMlNgkrvfeVzfxHG5Uk-ZQMM6ENWsH14",
+  "authDomain": "gen-lang-client-0432212767.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-kanzuttajweed-9add0487-3adf-48bb-94e6-5d999e58a800",
-  "storageBucket": "primordial-xyston-hggh3.firebasestorage.app",
-  "messagingSenderId": "609815261708",
+  "storageBucket": "gen-lang-client-0432212767.firebasestorage.app",
+  "messagingSenderId": "432489761035",
   "measurementId": "",
-  "oAuthClientId": "609815261708-3m8e82c624e1kr9f1o9v9muhl2r7ev26.apps.googleusercontent.com",
+  "oAuthClientId": "432489761035-c1dkocmqohge7d93tj2ijarc48ijgqrf.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

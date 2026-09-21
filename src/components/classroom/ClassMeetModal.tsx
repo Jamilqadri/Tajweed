@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ScheduledClass } from '../../types';
+import { ScheduledClass, ClassParticipant } from '../../types';
 import {
   X,
   Mic,
@@ -95,7 +95,20 @@ const SURAH_FATIHA_VERSES = [
 const ACADEMY_GOOGLE_ACCOUNT = 'kanzuttahreer@gmail.com';
 
 export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClose }) => {
-  const { teachers, students, groups, courses, currentUser, currentRole, language, admins } = useApp();
+  const {
+    teachers,
+    students,
+    groups,
+    courses,
+    currentUser,
+    currentRole,
+    language,
+    admins,
+    classes,
+    joinLiveClass,
+    updateParticipantMediaStatus,
+    leaveLiveClass,
+  } = useApp();
 
   const isTeacherOrAdmin = currentRole === 'teacher' || currentRole === 'admin' || currentRole === 'super_admin';
   const isSuperAdmin = currentRole === 'super_admin';
@@ -103,6 +116,38 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
   const canDownloadRecording = isSuperAdmin || (currentRole === 'admin' && !!currentAdminRecord?.permissions?.downloadRecordings);
   // Only Teachers and Admins can watch recorded class video; students have zero access and zero awareness
   const canWatchRecording = isTeacherOrAdmin;
+
+  // Participant Identity
+  const myTeacherRecord = teachers?.find((t) => t.userId === currentUser?.id || t.id === currentUser?.id);
+  const myStudentRecord = students?.find((s) => s.userId === currentUser?.id || s.id === currentUser?.id);
+
+  const myParticipantId =
+    currentRole === 'teacher'
+      ? (myTeacherRecord?.id || currentUser?.id || 'teacher')
+      : currentRole === 'student'
+      ? (myStudentRecord?.id || currentUser?.id || 'student')
+      : (currentUser?.id || 'admin');
+
+  const myParticipantName =
+    currentRole === 'teacher'
+      ? (myTeacherRecord?.fullName || currentUser?.name || 'Teacher')
+      : currentRole === 'student'
+      ? (myStudentRecord?.fullName || currentUser?.name || 'Student')
+      : (currentUser?.name || 'Admin');
+
+  const myParticipantRole: 'teacher' | 'student' | 'admin' = isTeacherOrAdmin ? 'teacher' : 'student';
+
+  // Live real-time class document from centralized AppContext & participants list
+  const currentLiveClass = classes.find((c) => c.id === classItem.id) || classItem;
+  const liveParticipants = currentLiveClass.participants || [];
+  const studentAttendees = liveParticipants.filter((p) => p.role === 'student');
+
+  // Enrolled expected students for this class
+  const classGroup = classItem.groupId ? groups.find((g) => g.id === classItem.groupId) : null;
+  const enrolledStudentIds = classItem.classType === 'group'
+    ? (classGroup?.studentIds || [])
+    : classItem.studentId ? [classItem.studentId] : [];
+  const allEnrolledStudents = students.filter((s) => enrolledStudentIds.includes(s.id));
 
   // Teaching display mode
   const [teachingMode, setTeachingMode] = useState<TeachingMode>('video');
@@ -321,6 +366,25 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
     };
   }, []);
 
+  // Real-time participant joining & session registration
+  useEffect(() => {
+    const participant: ClassParticipant = {
+      id: myParticipantId,
+      name: myParticipantName,
+      role: myParticipantRole,
+      audioOn: micOn,
+      videoOn: videoOn,
+      handRaised: false,
+      joinedAt: new Date().toISOString(),
+    };
+
+    joinLiveClass(classItem.id, participant);
+
+    return () => {
+      leaveLiveClass(classItem.id, myParticipantId);
+    };
+  }, [classItem.id, myParticipantId]);
+
   // Update video element srcObject if localStream changes or view toggles
   useEffect(() => {
     if (localVideoRef.current && localStream) {
@@ -328,24 +392,35 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
     }
   }, [localStream, videoOn, teachingMode]);
 
-  // 3. Real Microphone Toggle (Audio Track Enabled / Disabled)
+  // 3. Real Microphone Toggle (Audio Track Enabled / Disabled with Live Sync)
   const handleToggleMic = () => {
+    const nextMic = !micOn;
     if (localStream) {
       localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !micOn;
+        track.enabled = nextMic;
       });
     }
-    setMicOn(!micOn);
+    setMicOn(nextMic);
+    updateParticipantMediaStatus(classItem.id, myParticipantId, { audioOn: nextMic });
   };
 
-  // 4. Real Camera Toggle (Video Track Enabled / Disabled)
+  // 4. Real Camera Toggle (Video Track Enabled / Disabled with Live Sync)
   const handleToggleVideo = () => {
+    const nextVideo = !videoOn;
     if (localStream) {
       localStream.getVideoTracks().forEach((track) => {
-        track.enabled = !videoOn;
+        track.enabled = nextVideo;
       });
     }
-    setVideoOn(!videoOn);
+    setVideoOn(nextVideo);
+    updateParticipantMediaStatus(classItem.id, myParticipantId, { videoOn: nextVideo });
+  };
+
+  // Hand Raise Toggle with Live Sync
+  const handleToggleHandRaise = () => {
+    const nextHand = !handRaised;
+    setHandRaised(nextHand);
+    updateParticipantMediaStatus(classItem.id, myParticipantId, { handRaised: nextHand });
   };
 
   // 5. Real Screen Sharing (getDisplayMedia)
@@ -776,7 +851,100 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
       {/* 2. MAIN MEETING STAGE & SIDEBAR */}
       <div className="flex-1 overflow-hidden flex relative p-2 sm:p-4 gap-3 bg-[#202124]">
         {/* Stage Content Area */}
-        <div className="flex-1 flex flex-col justify-center items-center overflow-hidden rounded-2xl relative">
+        <div className="flex-1 flex flex-col justify-start items-center overflow-hidden rounded-2xl relative">
+          {/* Live Attendance Dock for Teacher / Host */}
+          {isTeacherOrAdmin && (
+            <div className="w-full mb-3 p-3 rounded-2xl bg-[#1c1d20] border border-[#3c4043] shadow-xl shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#303134] pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                    <span>{language === 'ur' ? 'حاضری براہِ راست (Live Attendance)' : 'Live Attendance'}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-700">
+                      {studentAttendees.length} {language === 'ur' ? 'طلباء شامل ہیں' : 'Joined'}
+                    </span>
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  <span>{language === 'ur' ? 'آڈیو/ویڈیو اسٹیٹس لائیو اپڈیٹ ہوتا ہے' : 'Audio/Video status updates in real time'}</span>
+                </div>
+              </div>
+
+              {studentAttendees.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-2.5">
+                  {studentAttendees.map((student) => (
+                    <div
+                      key={student.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-[#282a2d] border border-[#3c4043] text-xs transition-colors hover:border-slate-500"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 ring-2 ring-emerald-500/40">
+                          {student.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="truncate">
+                          <div className="font-semibold text-slate-100 truncate flex items-center gap-1.5">
+                            <span>{student.name}</span>
+                            {student.handRaised && (
+                              <span className="text-[10px] text-amber-300 animate-bounce" title="Hand Raised">
+                                ✋
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-emerald-400 font-medium">
+                            {student.joinedAt ? new Date(student.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Present'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Audio Status */}
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            student.audioOn
+                              ? 'bg-emerald-950/90 border border-emerald-500/50 text-emerald-300'
+                              : 'bg-red-950/90 border border-red-500/50 text-red-300'
+                          }`}
+                        >
+                          {student.audioOn ? <Mic className="w-3 h-3 text-emerald-400" /> : <MicOff className="w-3 h-3 text-red-400" />}
+                          <span>{student.audioOn ? 'Audio On' : 'Audio Off'}</span>
+                        </span>
+
+                        {/* Video Status */}
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            student.videoOn
+                              ? 'bg-emerald-950/90 border border-emerald-500/50 text-emerald-300'
+                              : 'bg-slate-800 border border-slate-600 text-slate-300'
+                          }`}
+                        >
+                          {student.videoOn ? <Video className="w-3 h-3 text-emerald-400" /> : <VideoOff className="w-3 h-3 text-slate-400" />}
+                          <span>{student.videoOn ? 'Video On' : 'Video Off'}</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="pt-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    <span>
+                      {language === 'ur'
+                        ? 'طلباء کے شامل ہونے کا انتظار ہے۔ جیسے ہی طالب علم Join Class دبائے گا، اس کا نام اور آڈیو/ویڈیو اسٹیٹس فوراً یہاں ظاہر ہوں گے۔'
+                        : 'Waiting for student(s) to join. Their name and live Audio/Video status will appear here as soon as they join.'}
+                    </span>
+                  </div>
+                  {allEnrolledStudents.length > 0 && (
+                    <span className="text-[11px] text-slate-500">
+                      Enrolled: {allEnrolledStudents.map((s) => s.fullName).join(', ')}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* MODE 1: AUDIO-ONLY TEACHING MODE */}
           {teachingMode === 'audio_only' && (
             <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#1a1b1e] rounded-2xl border border-[#3c4043] animate-in fade-in duration-200">
@@ -1127,13 +1295,40 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
           {/* MODE 5: STANDARD GOOGLE MEET VIDEO GALLERY (Default) */}
           {teachingMode === 'video' && (
             <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 gap-3 p-1">
-              {/* Tile 1: Teacher (Active Reciter) */}
+              {/* Tile 1: Host / Teacher */}
               <div className="relative w-full h-full min-h-[220px] bg-[#303134] rounded-2xl overflow-hidden border border-[#3c4043] flex items-center justify-center shadow-lg group">
-                <img
-                  src={teacher?.profilePhoto || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&auto=format&fit=crop&q=80'}
-                  alt={teacher?.fullName}
-                  className="w-full h-full object-cover"
-                />
+                {isTeacherOrAdmin ? (
+                  <>
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover transition-opacity duration-200 ${videoOn && mediaPermission === 'granted' ? 'opacity-100' : 'hidden'}`}
+                    />
+                    {(!videoOn || mediaPermission !== 'granted') && (
+                      <div className="text-center space-y-2 p-4">
+                        <div className="w-20 h-20 rounded-full overflow-hidden mx-auto border-2 border-emerald-500 shadow-md">
+                          <img
+                            src={teacher?.profilePhoto || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&auto=format&fit=crop&q=80'}
+                            alt={teacher?.fullName}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <span className="text-xs text-slate-300 font-medium block">
+                          {!videoOn ? (language === 'ur' ? 'کیمرہ بند ہے' : 'Camera is off') : (language === 'ur' ? 'کیمرہ اجازت درکار ہے' : 'Camera permission requested')}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <img
+                    src={teacher?.profilePhoto || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&auto=format&fit=crop&q=80'}
+                    alt={teacher?.fullName}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
 
                 {/* Bottom Bar Info */}
@@ -1141,12 +1336,20 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
                   <div className="flex items-center gap-2 bg-[#202124]/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-[#3c4043]/50">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <span className="font-semibold text-white">
-                      {teacher?.fullName} ({language === 'ur' ? 'استاد محترم' : 'Teacher'})
+                      {teacher?.fullName || 'Teacher'} ({isTeacherOrAdmin ? (language === 'ur' ? 'آپ - استاد' : 'Host / You') : (language === 'ur' ? 'استاد محترم' : 'Teacher')})
                     </span>
                   </div>
 
-                  <div className="p-1.5 rounded-full bg-[#202124]/80 text-emerald-400 border border-[#3c4043]/50">
-                    <Volume2 className="w-3.5 h-3.5 animate-pulse" />
+                  <div className="flex items-center gap-1.5">
+                    {isTeacherOrAdmin ? (
+                      <div className="p-1.5 rounded-full bg-[#202124]/80 text-white border border-[#3c4043]/50">
+                        {micOn ? <Mic className="w-3.5 h-3.5 text-emerald-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                      </div>
+                    ) : (
+                      <div className="p-1.5 rounded-full bg-[#202124]/80 text-emerald-400 border border-[#3c4043]/50">
+                        <Volume2 className="w-3.5 h-3.5 animate-pulse" />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1316,63 +1519,145 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
               </div>
             )}
 
-            {/* Drawer 2: People List */}
+            {/* Drawer 2: People List (Live Attendance & Statuses) */}
             {activeDrawer === 'people' && (
               <div className="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
+                {/* Host Section */}
                 <div>
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
                     {language === 'ur' ? 'استاد محترم (Host)' : 'Instructor (Host)'}
                   </span>
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#303134] border border-[#3c4043]">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <img
                         src={teacher?.profilePhoto || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80'}
                         alt={teacher?.fullName}
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-emerald-500/50"
                       />
-                      <div>
-                        <div className="font-semibold text-slate-100">{teacher?.fullName}</div>
-                        <div className="text-[10px] text-emerald-400">Host • Certified Tajweed Scholar</div>
+                      <div className="truncate">
+                        <div className="font-semibold text-slate-100 truncate flex items-center gap-1.5">
+                          <span>{teacher?.fullName}</span>
+                          {isTeacherOrAdmin && <span className="text-[10px] text-blue-300 font-normal">(You)</span>}
+                        </div>
+                        <div className="text-[10px] text-emerald-400 font-medium">
+                          {currentLiveClass?.teacherJoined ? (language === 'ur' ? 'کلاس میں لائیو موجود ہے' : 'Host • Joined Live') : (language === 'ur' ? 'کلاس روم میں انتظار' : 'Host')}
+                        </div>
                       </div>
                     </div>
-                    <Mic className="w-4 h-4 text-emerald-400" />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isTeacherOrAdmin ? (
+                        <>
+                          {micOn ? <Mic className="w-3.5 h-3.5 text-emerald-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                          {videoOn ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5 text-slate-500" />}
+                        </>
+                      ) : (
+                        <Mic className="w-4 h-4 text-emerald-400" />
+                      )}
+                    </div>
                   </div>
                 </div>
 
+                {/* Joined Students (Live Attendance) */}
                 <div>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                    {language === 'ur' ? 'طلباء (Students)' : 'Enrolled Students'}
-                  </span>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#303134] border border-[#3c4043]">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-                          {currentUser?.name ? currentUser.name.charAt(0) : 'S'}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-100">{currentUser?.name || 'Student'} (You)</div>
-                          <div className="text-[10px] text-blue-300">Active Participant</div>
-                        </div>
-                      </div>
-                      {micOn ? <Mic className="w-4 h-4 text-emerald-400" /> : <MicOff className="w-4 h-4 text-red-400" />}
-                    </div>
-
-                    {classItem.classType === 'group' && (
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#303134]/60 border border-[#3c4043]/50">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center font-bold">
-                            Z
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-200">Zaid Khan</div>
-                            <div className="text-[10px] text-slate-400">Classmate (Listening)</div>
-                          </div>
-                        </div>
-                        <MicOff className="w-4 h-4 text-slate-500" />
-                      </div>
-                    )}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      {language === 'ur' ? 'لائیو طلباء حاضری' : 'Live Students in Class'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      {studentAttendees.length} {language === 'ur' ? 'حاضر' : 'Present'}
+                    </span>
                   </div>
+
+                  {studentAttendees.length > 0 ? (
+                    <div className="space-y-2">
+                      {studentAttendees.map((stu) => {
+                        const isMe = stu.id === myParticipantId;
+                        return (
+                          <div
+                            key={stu.id}
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-[#303134] border border-[#3c4043]"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 ring-2 ring-emerald-500/40">
+                                {stu.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="truncate">
+                                <div className="font-semibold text-slate-100 truncate flex items-center gap-1.5">
+                                  <span>{stu.name}</span>
+                                  {isMe && <span className="text-[10px] text-blue-300 font-normal">({language === 'ur' ? 'آپ' : 'You'})</span>}
+                                  {stu.handRaised && <span className="text-amber-300 animate-bounce">✋</span>}
+                                </div>
+                                <div className="text-[10px] text-emerald-400">
+                                  {stu.joinedAt ? new Date(stu.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Media Status Indicators */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                                  stu.audioOn
+                                    ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/40'
+                                    : 'bg-red-950/90 text-red-300 border border-red-500/40'
+                                }`}
+                                title={stu.audioOn ? 'Audio On' : 'Audio Off'}
+                              >
+                                {stu.audioOn ? <Mic className="w-3 h-3 text-emerald-400" /> : <MicOff className="w-3 h-3 text-red-400" />}
+                                <span>{stu.audioOn ? 'Audio' : 'Muted'}</span>
+                              </span>
+
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                                  stu.videoOn
+                                    ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/40'
+                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                }`}
+                                title={stu.videoOn ? 'Video On' : 'Video Off'}
+                              >
+                                {stu.videoOn ? <Video className="w-3 h-3 text-emerald-400" /> : <VideoOff className="w-3 h-3 text-slate-400" />}
+                                <span>{stu.videoOn ? 'Video' : 'Cam Off'}</span>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-[#202124] border border-dashed border-[#3c4043] text-center text-slate-400 text-xs">
+                      {language === 'ur'
+                        ? 'ابھی تک کوئی طالب علم شامل نہیں ہوا۔'
+                        : 'No students have joined yet.'}
+                    </div>
+                  )}
                 </div>
+
+                {/* Enrolled but not yet joined */}
+                {allEnrolledStudents.filter((s) => !studentAttendees.some((p) => p.id === s.id)).length > 0 && (
+                  <div className="pt-2 border-t border-[#3c4043]">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                      {language === 'ur' ? 'غیر حاضر طلباء' : 'Not Yet Joined'}
+                    </span>
+                    <div className="space-y-1.5">
+                      {allEnrolledStudents
+                        .filter((s) => !studentAttendees.some((p) => p.id === s.id))
+                        .map((stu) => (
+                          <div
+                            key={stu.id}
+                            className="flex items-center justify-between p-2 rounded-lg bg-[#202124]/60 border border-[#3c4043]/40 text-slate-400 text-[11px]"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <div className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center font-medium text-[10px]">
+                                {stu.fullName.charAt(0)}
+                              </div>
+                              <span className="truncate">{stu.fullName}</span>
+                            </div>
+                            <span className="text-[10px] text-amber-500/80 font-medium">Offline</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1512,7 +1797,7 @@ export const ClassMeetModal: React.FC<ClassMeetModalProps> = ({ classItem, onClo
           {/* 3. Raise Hand Button */}
           <button
             type="button"
-            onClick={() => setHandRaised(!handRaised)}
+            onClick={handleToggleHandRaise}
             className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
               handRaised ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/30' : 'bg-[#3c4043] hover:bg-[#4a4e52] text-white'
             }`}

@@ -7,6 +7,7 @@ import {
   Course,
   Group,
   ScheduledClass,
+  ClassParticipant,
   Payment,
   GoogleSheetRow,
   AppNotification,
@@ -35,7 +36,16 @@ import {
   deleteDocFromDb,
   subscribeCollection,
   seedCollectionIfEmpty,
+  isDbBootstrapped,
+  isBootstrappedSync,
+  syncChannel,
+  broadcastDbChange,
+  markDbBootstrapped,
 } from '../lib/firestoreRepository';
+import {
+  isRealGoogleMeetLink,
+  extractMeetingCode,
+} from '../lib/googleMeetService';
 
 interface AppContextType {
   // Language & i18n
@@ -85,7 +95,7 @@ interface AppContextType {
   admissions: Student[];
   generateStudentId: () => string;
   updateStudentStatus: (studentId: string, status: 'active' | 'inactive') => boolean;
-  deleteStudent: (studentId: string) => boolean;
+  deleteStudent: (studentId: string) => Promise<boolean> | boolean;
   transferStudentTeacher: (studentId: string, newTeacherId: string) => boolean;
   transferStudentAdmin: (studentId: string, newAdminId: string) => boolean;
   submitAdmission: (formData: Omit<Student, 'id' | 'studentId' | 'userId' | 'admissionStatus' | 'initialPassword' | 'createdAt'>) => {
@@ -123,7 +133,7 @@ interface AppContextType {
   ) => Teacher;
   updateTeacher: (id: string, data: Partial<Teacher>) => boolean;
   toggleTeacherStatus: (id: string) => boolean;
-  deleteTeacher: (id: string) => boolean;
+  deleteTeacher: (id: string) => Promise<boolean> | boolean;
 
   // Group Management
   createGroup: (groupData: Omit<Group, 'id' | 'currentStudents'>) => Group;
@@ -141,6 +151,15 @@ interface AppContextType {
   ) => { hasConflict: boolean; reason?: string };
   scheduleClass: (classData: any) => { success: boolean; message?: string; classItem?: ScheduledClass };
   updateClassStatus: (classId: string, status: ScheduledClass['status']) => boolean;
+  updateClassMeetLink: (classId: string, meetLink: string) => boolean;
+  joinLiveClass: (classId: string, participant?: ClassParticipant) => Promise<boolean>;
+  syncAllMeetLinks: () => Promise<number>;
+  updateParticipantMediaStatus: (
+    classId: string,
+    participantId: string,
+    status: { audioOn?: boolean; videoOn?: boolean; handRaised?: boolean }
+  ) => Promise<boolean>;
+  leaveLiveClass: (classId: string, participantId: string) => Promise<boolean>;
 
   // Fee Management
   submitFeeProof: (data: {
@@ -170,7 +189,8 @@ interface AppContextType {
   updateAdmin: (id: string, data: any) => boolean;
   updateAdminPermissions: (adminId: string, permissions: AdminPermissions) => boolean;
   toggleAdminStatus: (adminId: string) => boolean;
-  deleteAdmin: (adminId: string) => boolean;
+  deleteAdmin: (adminId: string) => Promise<boolean> | boolean;
+  updateSuperAdminName: (newName: string) => Promise<boolean> | boolean;
 
   // Google Sheets Sync
   syncGoogleSheets: () => void;
@@ -273,6 +293,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // 1. Ensure initial cloud database collections are seeded if Firestore is fresh
     const bootstrapCloudDb = async () => {
       try {
+        const alreadyBootstrapped = await isDbBootstrapped();
+        if (alreadyBootstrapped) {
+          return;
+        }
+
         await Promise.allSettled([
           seedCollectionIfEmpty('students', INITIAL_STUDENTS),
           seedCollectionIfEmpty('teachers', INITIAL_TEACHERS),
@@ -286,111 +311,139 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           seedCollectionIfEmpty('notifications', INITIAL_NOTIFICATIONS),
           seedCollectionIfEmpty('activityLogs', INITIAL_ACTIVITY_LOGS),
         ]);
-      } catch (err) {
-        console.error('Firestore bootstrap error:', err);
+        await markDbBootstrapped();
+      } catch (err: any) {
+        console.info('Firestore bootstrap initialization deferred:', err?.message || err);
       }
     };
     bootstrapCloudDb();
 
-    // 2. Real-time subscriptions across all collections
+    // 2. Real-time subscriptions across all collections (Firestore Single Source of Truth)
     const unsubs: Array<() => void> = [];
 
+    // Instant cross-tab real-time sync channel
+    if (syncChannel) {
+      const channel = syncChannel;
+      const handleSyncMessage = (event: MessageEvent) => {
+        if (!isMounted) return;
+        const { action, payload } = event.data || {};
+        if (!action) return;
+
+        if (action === 'DELETE_DOC') {
+          const { collectionName, docId } = payload || {};
+          if (collectionName === 'students') {
+            setStudents((prev) => prev.filter((s) => s.id !== docId && s.studentId !== docId));
+          } else if (collectionName === 'teachers') {
+            setTeachers((prev) => prev.filter((t) => t.id !== docId && t.teacherId !== docId));
+          } else if (collectionName === 'admins') {
+            setAdmins((prev) => prev.filter((a) => a.id !== docId && a.userId !== docId));
+          } else if (collectionName === 'courses') {
+            setCourses((prev) => prev.filter((c) => c.id !== docId));
+          } else if (collectionName === 'groups') {
+            setGroups((prev) => prev.filter((g) => g.id !== docId));
+          } else if (collectionName === 'classes') {
+            setClasses((prev) => prev.filter((c) => c.id !== docId));
+          } else if (collectionName === 'users') {
+            setUsers((prev) => prev.filter((u) => u.id !== docId));
+          } else if (collectionName === 'payments') {
+            setPayments((prev) => prev.filter((p) => p.id !== docId));
+          }
+        } else if (action === 'UPDATE_CLASS_LIVE' || (action === 'SAVE_DOC' && payload?.collectionName === 'classes')) {
+          const { data } = payload || {};
+          if (data?.id) {
+            setClasses((prev) => {
+              const index = prev.findIndex((c) => c.id === data.id);
+              if (index >= 0) {
+                const updated = [...prev];
+                updated[index] = { ...updated[index], ...data };
+                return updated;
+              }
+              return [...prev, data];
+            });
+          }
+        }
+      };
+      channel.addEventListener('message', handleSyncMessage);
+      unsubs.push(() => channel.removeEventListener('message', handleSyncMessage));
+    }
+
+    // Helper to apply real-time Firestore snapshots without wiping out data before initial bootstrap completes
+    const syncRemoteCollection = <T,>(
+      remote: T[],
+      setter: React.Dispatch<React.SetStateAction<T[]>>
+    ) => {
+      if (!isMounted) return;
+      if (remote && remote.length > 0) {
+        setter(remote);
+      } else if (isBootstrappedSync()) {
+        setter([]);
+      }
+    };
+
+    // Firestore real-time onSnapshot listeners
     unsubs.push(
       subscribeCollection<Student>('students', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setStudents(remote);
-        }
+        syncRemoteCollection(remote, setStudents);
       })
     );
 
     unsubs.push(
       subscribeCollection<Teacher>('teachers', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setTeachers(remote);
-        }
+        syncRemoteCollection(remote, setTeachers);
       })
     );
 
     unsubs.push(
       subscribeCollection<User>('users', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setUsers(remote);
-        }
+        syncRemoteCollection(remote, setUsers);
       })
     );
 
     unsubs.push(
       subscribeCollection<AdminUser>('admins', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setAdmins(remote);
-        }
+        syncRemoteCollection(remote, setAdmins);
       })
     );
 
     unsubs.push(
       subscribeCollection<Course>('courses', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setCourses(remote);
-        }
+        syncRemoteCollection(remote, setCourses);
       })
     );
 
     unsubs.push(
       subscribeCollection<Group>('groups', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setGroups(remote);
-        }
+        syncRemoteCollection(remote, setGroups);
       })
     );
 
     unsubs.push(
       subscribeCollection<ScheduledClass>('classes', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setClasses(remote);
-        }
+        syncRemoteCollection(remote, setClasses);
       })
     );
 
     unsubs.push(
       subscribeCollection<Payment>('payments', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setPayments(remote);
-        }
+        syncRemoteCollection(remote, setPayments);
       })
     );
 
     unsubs.push(
       subscribeCollection<GoogleSheetRow>('googleSheets', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setGoogleSheets(remote);
-        }
+        syncRemoteCollection(remote, setGoogleSheets);
       })
     );
 
     unsubs.push(
       subscribeCollection<AppNotification>('notifications', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setNotifications(remote);
-        }
+        syncRemoteCollection(remote, setNotifications);
       })
     );
 
     unsubs.push(
       subscribeCollection<ActivityLog>('activityLogs', (remote) => {
-        if (!isMounted) return;
-        if (remote && remote.length > 0) {
-          setActivityLogs(remote);
-        }
+        syncRemoteCollection(remote, setActivityLogs);
       })
     );
 
@@ -452,7 +505,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       trimmed === 'tajweed25' ||
       trimmed === 'superadmin' ||
       trimmed.includes('superadmin') ||
-      trimmed === 'founder@kanzutajweed.com'
+      trimmed === 'founder@kanzutajweed.com' ||
+      trimmed === 'kanzuttahreer@gmail.com' ||
+      trimmed === 'jamilqadri6710@gmail.com'
     ) {
       return { role: 'super_admin', name: 'Super Admin (Head of Academy)', label: 'سپر ایڈمن (Super Admin)' };
     }
@@ -586,7 +641,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     // 1. Check Super Admin keywords or founder email
-    if (!targetUser && (trimmed === 'tajweed25' || trimmed === 'superadmin' || trimmed === 'super_admin' || trimmed === 'founder@kanzutajweed.com')) {
+    if (
+      !targetUser &&
+      (trimmed === 'tajweed25' ||
+        trimmed === 'superadmin' ||
+        trimmed === 'super_admin' ||
+        trimmed === 'founder@kanzutajweed.com' ||
+        trimmed === 'kanzuttahreer@gmail.com' ||
+        trimmed === 'jamilqadri6710@gmail.com')
+    ) {
       targetUser = users.find((u) => u.role === 'super_admin');
     }
 
@@ -1404,19 +1467,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
 
-  const deleteTeacher = (teacherId: string): boolean => {
+  const deleteTeacher = async (teacherId: string): Promise<boolean> => {
     const teacher = teachers.find((t) => t.id === teacherId || t.teacherId === teacherId);
     if (!teacher) return false;
 
-    // Remove teacher from state
-    setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
+    // Remove teacher from state immediately
+    setTeachers((prev) => prev.filter((t) => t.id !== teacher.id && t.teacherId !== teacher.teacherId));
     // Remove linked user account
-    setUsers((prev) => prev.filter((u) => u.id !== teacher.userId && u.email.toLowerCase() !== teacher.email.toLowerCase()));
+    setUsers((prev) =>
+      prev.filter(
+        (u) =>
+          u.id !== teacher.userId &&
+          u.email.toLowerCase() !== teacher.email.toLowerCase() &&
+          u.username?.toLowerCase() !== teacher.email.toLowerCase()
+      )
+    );
 
     // Clear teacher from any groups
     setGroups((prev) =>
       prev.map((g) => {
-        if (g.teacherId === teacher.id) {
+        if (g.teacherId === teacher.id || g.teacherId === teacher.teacherId) {
           const updated = { ...g, teacherId: '' };
           saveDoc('groups', g.id, updated).catch((e) => console.error(e));
           return updated;
@@ -1428,7 +1498,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Cancel or unassign any upcoming scheduled classes for this teacher
     setClasses((prev) =>
       prev.map((c) => {
-        if (c.teacherId === teacher.id) {
+        if (c.teacherId === teacher.id || c.teacherId === teacher.teacherId) {
           const updated = { ...c, status: 'cancelled' as ScheduledClass['status'] };
           saveDoc('classes', c.id, updated).catch((e) => console.error(e));
           return updated;
@@ -1437,10 +1507,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
-    // Delete documents from Firestore
-    deleteDocFromDb('teachers', teacher.id).catch((e) => console.error(e));
-    if (teacher.userId) {
-      deleteDocFromDb('users', teacher.userId).catch((e) => console.error(e));
+    try {
+      // Delete documents from Firestore
+      await deleteDocFromDb('teachers', teacher.id);
+      if (teacher.userId) {
+        await deleteDocFromDb('users', teacher.userId);
+      }
+      const matchedUser = users.find(
+        (u) =>
+          u.id === teacher.userId ||
+          u.email?.toLowerCase() === teacher.email.toLowerCase() ||
+          u.username?.toLowerCase() === teacher.email.toLowerCase()
+      );
+      if (matchedUser && matchedUser.id !== teacher.userId) {
+        await deleteDocFromDb('users', matchedUser.id);
+      }
+    } catch (e) {
+      console.error('Error deleting teacher from Firestore:', e);
     }
 
     addLog('DELETE_TEACHER', `Permanently deleted teacher ${teacher.fullName} (${teacher.id})`);
@@ -1449,10 +1532,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Group Management
   const createGroup = (groupData: Omit<Group, 'id' | 'currentStudents'>): Group => {
+    const groupId = 'group_' + Date.now();
+    const cleanMeet =
+      groupData.meetLink && isRealGoogleMeetLink(groupData.meetLink)
+        ? groupData.meetLink.trim()
+        : '';
+
     const newGroup: Group = {
       ...groupData,
-      id: 'group_' + Date.now(),
+      id: groupId,
       currentStudents: 0,
+      meetLink: cleanMeet,
     };
     setGroups((prev) => [...prev, newGroup]);
     saveDoc('groups', newGroup.id, newGroup).catch((e) => console.error(e));
@@ -1504,7 +1594,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       maxCapacity: groupData.maxCapacity || groupData.capacity || 10,
       studentIds: groupData.studentIds || [],
       status: groupData.status || 'active',
-      meetLink: groupData.meetLink || 'https://meet.google.com/knz-tjwd-grp',
+      meetLink:
+        groupData.meetLink && !groupData.meetLink.includes('knz-tjwd-grp')
+          ? groupData.meetLink
+          : undefined,
     });
   };
 
@@ -1527,14 +1620,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
 
-  const deleteStudent = (studentId: string): boolean => {
+  const deleteStudent = async (studentId: string): Promise<boolean> => {
     const student = students.find((s) => s.id === studentId || s.studentId === studentId);
     if (!student) return false;
 
-    // Remove from students state
-    setStudents((prev) => prev.filter((s) => s.id !== student.id));
+    // Remove from students state immediately
+    setStudents((prev) => prev.filter((s) => s.id !== student.id && s.studentId !== student.studentId));
     // Remove from users state
-    setUsers((prev) => prev.filter((u) => u.id !== student.userId && u.username?.toLowerCase() !== student.studentId.toLowerCase()));
+    setUsers((prev) =>
+      prev.filter(
+        (u) =>
+          u.id !== student.userId &&
+          u.username?.toLowerCase() !== student.studentId.toLowerCase() &&
+          u.phone !== student.mobile
+      )
+    );
 
     // Remove from any groups
     setGroups((prev) =>
@@ -1577,10 +1677,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
-    // Delete student doc and user doc from Firestore
-    deleteDocFromDb('students', student.id).catch((e) => console.error(e));
-    if (student.userId) {
-      deleteDocFromDb('users', student.userId).catch((e) => console.error(e));
+    try {
+      // Delete student doc and user doc from Firestore
+      await deleteDocFromDb('students', student.id);
+      if (student.userId) {
+        await deleteDocFromDb('users', student.userId);
+      }
+      const matchedUser = users.find(
+        (u) =>
+          u.id === student.userId ||
+          u.username?.toLowerCase() === student.studentId.toLowerCase() ||
+          (student.mobile && u.phone === student.mobile)
+      );
+      if (matchedUser && matchedUser.id !== student.userId) {
+        await deleteDocFromDb('users', matchedUser.id);
+      }
+    } catch (e) {
+      console.error('Error deleting student from Firestore:', e);
     }
 
     addLog('DELETE_STUDENT', `Permanently deleted student ${student.fullName} (ID: ${student.studentId})`);
@@ -1810,6 +1923,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const mappedStatus =
       classData.status === 'in_progress' ? 'live' : classData.status || 'scheduled';
 
+    // Ensure Teacher and Student use the exact same unique Google Meet link
+    let classMeetLink = classData.meetLink || '';
+    if (isRealGoogleMeetLink(classMeetLink)) {
+      // Valid real link provided directly
+    } else if (classData.classType === 'group' && classData.groupId) {
+      const grp = groups.find((g) => g.id === classData.groupId);
+      if (grp?.meetLink && isRealGoogleMeetLink(grp.meetLink)) {
+        classMeetLink = grp.meetLink;
+      } else {
+        classMeetLink = '';
+      }
+    } else if (classData.studentId) {
+      const stu = students.find((s) => s.id === classData.studentId || s.studentId === classData.studentId);
+      if (stu?.meetLink && isRealGoogleMeetLink(stu.meetLink)) {
+        classMeetLink = stu.meetLink;
+      } else {
+        classMeetLink = '';
+      }
+    } else {
+      classMeetLink = '';
+    }
+
     const newClass: ScheduledClass = {
       id: 'class_' + Date.now(),
       courseId: classData.courseId,
@@ -1822,7 +1957,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       endTime: calcEndTime,
       time: startTime,
       durationMinutes: duration,
-      meetLink: classData.meetLink || 'https://meet.google.com/knz-tjwd-sim',
+      meetLink: classMeetLink,
+      googleMeetCode: extractMeetingCode(classMeetLink),
       status: mappedStatus,
     };
 
@@ -1864,14 +2000,175 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setClasses((prev) =>
       prev.map((c) => {
         if (c.id === classId) {
-          const updated = { ...c, status };
+          const updated: ScheduledClass = {
+            ...c,
+            status,
+            teacherJoined: status === 'live' ? true : status === 'completed' ? false : c.teacherJoined,
+          };
           saveDoc('classes', classId, updated).catch((e) => console.error(e));
+          broadcastDbChange('UPDATE_CLASS_LIVE', { collectionName: 'classes', data: updated });
           return updated;
         }
         return c;
       })
     );
     addLog('UPDATE_CLASS_STATUS', `Updated class ${classId} status to ${status}`);
+    return true;
+  };
+
+  const updateClassMeetLink = (classId: string, meetLink: string): boolean => {
+    const cleanLink = meetLink.trim();
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id === classId) {
+          const updated: ScheduledClass = {
+            ...c,
+            meetLink: cleanLink,
+            googleMeetCode: extractMeetingCode(cleanLink),
+          };
+          saveDoc('classes', classId, updated).catch((e) => console.error('Error saving updated class link:', e));
+          broadcastDbChange('UPDATE_CLASS_MEET_LINK', { collectionName: 'classes', data: updated });
+
+          // Also update group or student if applicable so subsequent classes use this link
+          if (c.groupId) {
+            updateGroup(c.groupId, { meetLink: cleanLink });
+          }
+          if (c.studentId) {
+            const targetStu = students.find((s) => s.id === c.studentId || s.studentId === c.studentId);
+            if (targetStu) {
+              const updatedStu = { ...targetStu, meetLink: cleanLink };
+              saveDoc('students', targetStu.id, updatedStu).catch((e) => console.error(e));
+              setStudents((sprev) => sprev.map((s) => (s.id === targetStu.id ? updatedStu : s)));
+            }
+          }
+
+          return updated;
+        }
+        return c;
+      })
+    );
+    addLog('UPDATE_CLASS_MEET_LINK', `Updated meeting link for class ${classId}`);
+    return true;
+  };
+
+  const joinLiveClass = async (classId: string, participant?: ClassParticipant): Promise<boolean> => {
+    let updatedClass: ScheduledClass | null = null;
+    const isTeacher =
+      participant?.role === 'teacher' ||
+      participant?.role === 'admin' ||
+      currentRole === 'teacher' ||
+      currentRole === 'admin' ||
+      currentRole === 'super_admin';
+
+    const effectiveParticipant: ClassParticipant = participant || {
+      id: currentUser?.id || 'user_' + Date.now(),
+      name: currentUser?.name || (isTeacher ? 'Teacher' : 'Student'),
+      role: isTeacher ? 'teacher' : 'student',
+      audioOn: true,
+      videoOn: true,
+      joinedAt: new Date().toISOString(),
+    };
+
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id === classId) {
+          const existingParticipants = c.participants || [];
+          const filtered = existingParticipants.filter((p) => p.id !== effectiveParticipant.id);
+          const updatedParticipants = [...filtered, effectiveParticipant];
+          const updated: ScheduledClass = {
+            ...c,
+            status: isTeacher ? 'live' : c.status,
+            teacherJoined: isTeacher ? true : Boolean(c.teacherJoined),
+            teacherJoinedAt: isTeacher ? (c.teacherJoinedAt || new Date().toISOString()) : c.teacherJoinedAt,
+            participants: updatedParticipants,
+          };
+          updatedClass = updated;
+          return updated;
+        }
+        return c;
+      })
+    );
+
+    if (updatedClass) {
+      try {
+        await saveDoc('classes', classId, updatedClass);
+        broadcastDbChange('UPDATE_CLASS_LIVE', { collectionName: 'classes', data: updatedClass });
+      } catch (err) {
+        console.error('Error persisting live class join:', err);
+      }
+    }
+    return true;
+  };
+
+  const updateParticipantMediaStatus = async (
+    classId: string,
+    participantId: string,
+    status: { audioOn?: boolean; videoOn?: boolean; handRaised?: boolean }
+  ): Promise<boolean> => {
+    let updatedClass: ScheduledClass | null = null;
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id === classId) {
+          const participants = (c.participants || []).map((p) => {
+            if (p.id === participantId) {
+              return {
+                ...p,
+                audioOn: status.audioOn !== undefined ? status.audioOn : p.audioOn,
+                videoOn: status.videoOn !== undefined ? status.videoOn : p.videoOn,
+                handRaised: status.handRaised !== undefined ? status.handRaised : p.handRaised,
+              };
+            }
+            return p;
+          });
+          const updated: ScheduledClass = {
+            ...c,
+            participants,
+          };
+          updatedClass = updated;
+          return updated;
+        }
+        return c;
+      })
+    );
+
+    if (updatedClass) {
+      try {
+        await saveDoc('classes', classId, updatedClass);
+        broadcastDbChange('UPDATE_CLASS_LIVE', { collectionName: 'classes', data: updatedClass });
+      } catch (err) {
+        console.error('Error persisting live media update:', err);
+      }
+    }
+    return true;
+  };
+
+  const leaveLiveClass = async (classId: string, participantId: string): Promise<boolean> => {
+    let updatedClass: ScheduledClass | null = null;
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id === classId) {
+          const participants = (c.participants || []).filter((p) => p.id !== participantId);
+          const hasTeacher = participants.some((p) => p.role === 'teacher' || p.role === 'admin');
+          const updated: ScheduledClass = {
+            ...c,
+            teacherJoined: hasTeacher ? c.teacherJoined : false,
+            participants,
+          };
+          updatedClass = updated;
+          return updated;
+        }
+        return c;
+      })
+    );
+
+    if (updatedClass) {
+      try {
+        await saveDoc('classes', classId, updatedClass);
+        broadcastDbChange('UPDATE_CLASS_LIVE', { collectionName: 'classes', data: updatedClass });
+      } catch (err) {
+        console.error('Error persisting leave class status:', err);
+      }
+    }
     return true;
   };
 
@@ -2079,15 +2376,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
 
-  const deleteAdmin = (adminId: string): boolean => {
-    const admin = admins.find((a) => a.id === adminId);
+  const deleteAdmin = async (adminId: string): Promise<boolean> => {
+    const admin = admins.find((a) => a.id === adminId || a.userId === adminId);
     if (!admin) return false;
 
-    setAdmins((prev) => prev.filter((a) => a.id !== adminId));
-    setUsers((prev) => prev.filter((u) => u.id !== admin.userId));
-    deleteDocFromDb('admins', adminId).catch((e) => console.error(e));
-    deleteDocFromDb('users', admin.userId).catch((e) => console.error(e));
-    addLog('DELETE_ADMIN', `Deleted admin ${admin.name} (${adminId})`);
+    // Immediately remove from state
+    setAdmins((prev) => prev.filter((a) => a.id !== admin.id && a.userId !== admin.userId));
+    setUsers((prev) =>
+      prev.filter(
+        (u) =>
+          u.id !== admin.userId &&
+          u.id !== admin.id &&
+          u.email?.toLowerCase() !== admin.email?.toLowerCase()
+      )
+    );
+
+    try {
+      await deleteDocFromDb('admins', admin.id);
+      if (admin.userId) {
+        await deleteDocFromDb('users', admin.userId);
+      }
+      const matchedUser = users.find(
+        (u) =>
+          u.id === admin.userId ||
+          u.email?.toLowerCase() === admin.email.toLowerCase() ||
+          u.username?.toLowerCase() === admin.email.toLowerCase()
+      );
+      if (matchedUser && matchedUser.id !== admin.userId) {
+        await deleteDocFromDb('users', matchedUser.id);
+      }
+    } catch (e) {
+      console.error('Error deleting admin from Firestore:', e);
+    }
+
+    addLog('DELETE_ADMIN', `Deleted admin ${admin.name || admin.fullName} (${admin.id})`);
     return true;
   };
 
@@ -2136,6 +2458,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
     addLog('UPDATE_ADMIN', `Updated admin ${id}`);
     return true;
+  };
+
+  const updateSuperAdminName = async (newName: string): Promise<boolean> => {
+    const trimmed = newName.trim();
+    if (!trimmed) return false;
+
+    // Find super admin user
+    const superAdminUser = users.find(
+      (u) => u.role === 'super_admin' || (currentUser && u.id === currentUser.id)
+    );
+
+    if (superAdminUser) {
+      const updatedUser: User = {
+        ...superAdminUser,
+        name: trimmed,
+      };
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === superAdminUser.id || u.role === 'super_admin' ? { ...u, name: trimmed } : u))
+      );
+
+      if (currentUser && (currentUser.id === superAdminUser.id || currentUser.role === 'super_admin')) {
+        const updatedCurrentUser = { ...currentUser, name: trimmed };
+        setCurrentUser(updatedCurrentUser);
+      }
+
+      try {
+        await saveDoc('users', superAdminUser.id, updatedUser);
+        broadcastDbChange('UPDATE_SUPER_ADMIN_NAME', { userId: superAdminUser.id, name: trimmed });
+      } catch (e) {
+        console.error('Error updating super admin name in Firestore:', e);
+      }
+
+      addLog('UPDATE_SUPER_ADMIN_NAME', `Super Admin name updated to "${trimmed}"`);
+      return true;
+    } else if (currentUser && currentUser.role === 'super_admin') {
+      const updatedCurrentUser = { ...currentUser, name: trimmed };
+      setCurrentUser(updatedCurrentUser);
+      return true;
+    }
+    return false;
   };
 
   // Google Sheets Sync
@@ -2212,6 +2575,77 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Synchronize Google Meet links across all Groups, 1-on-1 Students, and Classes
+  const syncAllMeetLinks = async (): Promise<number> => {
+    let updatedCount = 0;
+    const groupMeetMap = new Map<string, string>();
+    const studentMeetMap = new Map<string, string>();
+
+    // 1. Sync Groups (remove any fake links)
+    const updatedGroups = groups.map((grp) => {
+      let link = grp.meetLink || '';
+      if (!isRealGoogleMeetLink(link)) {
+        link = '';
+      }
+      if (link) {
+        groupMeetMap.set(grp.id, link);
+      }
+      if (link !== (grp.meetLink || '')) {
+        saveDoc('groups', grp.id, { ...grp, meetLink: link }).catch((e) => console.error(e));
+        updatedCount++;
+        return { ...grp, meetLink: link };
+      }
+      return grp;
+    });
+    setGroups(updatedGroups);
+
+    // 2. Sync 1-on-1 Students
+    const updatedStudents = students.map((stu) => {
+      let link = stu.meetLink || '';
+      if (!isRealGoogleMeetLink(link)) {
+        link = '';
+      }
+      if (link) {
+        studentMeetMap.set(stu.id, link);
+        studentMeetMap.set(stu.studentId, link);
+      }
+      if (link !== (stu.meetLink || '')) {
+        saveDoc('students', stu.id, { ...stu, meetLink: link }).catch((e) => console.error(e));
+        updatedCount++;
+        return { ...stu, meetLink: link };
+      }
+      return stu;
+    });
+    setStudents(updatedStudents);
+
+    // 3. Sync Scheduled Classes so Teacher & Student share identical real link
+    const updatedClasses = classes.map((cls) => {
+      let targetLink = isRealGoogleMeetLink(cls.meetLink) ? cls.meetLink! : '';
+      if (cls.classType === 'group' && cls.groupId && groupMeetMap.has(cls.groupId)) {
+        targetLink = groupMeetMap.get(cls.groupId)!;
+      } else if (cls.classType === 'one_to_one' && cls.studentId && studentMeetMap.has(cls.studentId)) {
+        targetLink = studentMeetMap.get(cls.studentId)!;
+      }
+
+      if (targetLink !== (cls.meetLink || '')) {
+        const updatedCls: ScheduledClass = {
+          ...cls,
+          meetLink: targetLink,
+          googleMeetCode: extractMeetingCode(targetLink),
+        };
+        saveDoc('classes', cls.id, updatedCls).catch((e) => console.error(e));
+        updatedCount++;
+        return updatedCls;
+      }
+      return cls;
+    });
+    setClasses(updatedClasses);
+
+    broadcastDbChange('UPDATE_CLASS_LIVE', { collectionName: 'classes', updatedCount });
+    addLog('SYNC_MEET_LINKS', `Synchronized unique Google Meet links for ${updatedCount} items in Firestore`);
+    return updatedCount;
   };
 
   // Notification read handler
@@ -2308,6 +2742,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         checkTeacherConflict,
         scheduleClass,
         updateClassStatus,
+        updateClassMeetLink,
+        joinLiveClass,
+        updateParticipantMediaStatus,
+        leaveLiveClass,
 
         submitFeeProof,
         submitPayment,
@@ -2320,9 +2758,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateAdminPermissions,
         toggleAdminStatus,
         deleteAdmin,
+        updateSuperAdminName,
 
         syncGoogleSheets,
         exportGoogleSheetsCsv,
+        syncAllMeetLinks,
 
         markNotificationAsRead,
         unreadNotificationsCount,

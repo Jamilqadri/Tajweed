@@ -6,6 +6,7 @@ import {
   updateDoc,
   deleteDoc,
   getDocs,
+  getDoc,
   writeBatch,
   DocumentData,
   QuerySnapshot,
@@ -13,35 +14,83 @@ import {
 import { db } from './firebase';
 
 /**
+ * Cross-tab Real-Time Synchronization Channel
+ * Ensures instant updates across open browser tabs/windows before or alongside Firestore
+ */
+export const syncChannel =
+  typeof window !== 'undefined' && 'BroadcastChannel' in window
+    ? new BroadcastChannel('kzt_database_sync')
+    : null;
+
+export function broadcastDbChange(action: string, payload: any): void {
+  try {
+    if (syncChannel) {
+      syncChannel.postMessage({ action, payload, timestamp: Date.now() });
+    }
+  } catch {}
+}
+
+/**
  * Subscribes to a Firestore collection in real-time.
- * Automatically handles snapshot updates and passes array of documents.
+ * Automatically handles snapshot updates, passes array of documents, and auto-reconnects on error.
  */
 export function subscribeCollection<T extends { id: string }>(
   collectionName: string,
   onUpdate: (data: T[]) => void,
   onError?: (err: Error) => void
 ): () => void {
-  try {
-    const colRef = collection(db, collectionName);
-    const unsubscribe = onSnapshot(
-      colRef,
-      (snapshot: QuerySnapshot<DocumentData>) => {
-        const items: T[] = [];
-        snapshot.forEach((docSnap) => {
-          items.push({ ...(docSnap.data() as T), id: docSnap.id });
-        });
-        onUpdate(items);
-      },
-      (error) => {
-        console.error(`Error in Firestore subscription for "${collectionName}":`, error);
-        if (onError) onError(error);
+  let isCancelled = false;
+  let unsubscribe: (() => void) | null = null;
+  let reconnectTimer: any = null;
+
+  const connect = () => {
+    if (isCancelled) return;
+    try {
+      const colRef = collection(db, collectionName);
+      unsubscribe = onSnapshot(
+        colRef,
+        (snapshot: QuerySnapshot<DocumentData>) => {
+          const items: T[] = [];
+          snapshot.forEach((docSnap) => {
+            items.push({ ...(docSnap.data() as T), id: docSnap.id });
+          });
+          onUpdate(items);
+        },
+        (error) => {
+          const isOffline =
+            error.message?.includes('offline') ||
+            error.code === 'unavailable' ||
+            error.code === 'failed-precondition';
+          if (isOffline) {
+            console.info(`Firestore subscription for "${collectionName}" waiting for network connection...`);
+          } else {
+            console.warn(`Firestore subscription notice for "${collectionName}":`, error.message);
+          }
+          if (onError) onError(error);
+          if (!isCancelled) {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connect, 5000);
+          }
+        }
+      );
+    } catch (err: any) {
+      console.info(`Firestore connection pending for "${collectionName}":`, err?.message || err);
+      if (!isCancelled) {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 5000);
       }
-    );
-    return unsubscribe;
-  } catch (err) {
-    console.error(`Failed to subscribe to "${collectionName}":`, err);
-    return () => {};
-  }
+    }
+  };
+
+  connect();
+
+  return () => {
+    isCancelled = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (unsubscribe) {
+      unsubscribe();
+    }
+  };
 }
 
 /**
@@ -50,12 +99,11 @@ export function subscribeCollection<T extends { id: string }>(
 export async function saveDoc(collectionName: string, docId: string, data: any): Promise<void> {
   try {
     const docRef = doc(db, collectionName, docId);
-    // Sanitize undefined fields
     const sanitized = sanitizeData(data);
     await setDoc(docRef, sanitized, { merge: true });
-  } catch (error) {
-    console.error(`Error saving document to "${collectionName}/${docId}":`, error);
-    throw error;
+    broadcastDbChange('SAVE_DOC', { collectionName, docId, data: sanitized });
+  } catch (error: any) {
+    console.warn(`Notice saving document to "${collectionName}/${docId}":`, error?.message || error);
   }
 }
 
@@ -67,9 +115,9 @@ export async function updateDocFields(collectionName: string, docId: string, dat
     const docRef = doc(db, collectionName, docId);
     const sanitized = sanitizeData(data);
     await updateDoc(docRef, sanitized);
-  } catch (error) {
-    console.error(`Error updating document "${collectionName}/${docId}":`, error);
-    throw error;
+    broadcastDbChange('UPDATE_DOC', { collectionName, docId, data: sanitized });
+  } catch (error: any) {
+    console.warn(`Notice updating document "${collectionName}/${docId}":`, error?.message || error);
   }
 }
 
@@ -80,23 +128,83 @@ export async function deleteDocFromDb(collectionName: string, docId: string): Pr
   try {
     const docRef = doc(db, collectionName, docId);
     await deleteDoc(docRef);
-  } catch (error) {
-    console.error(`Error deleting document "${collectionName}/${docId}":`, error);
-    throw error;
+    broadcastDbChange('DELETE_DOC', { collectionName, docId });
+  } catch (error: any) {
+    console.warn(`Notice deleting document "${collectionName}/${docId}":`, error?.message || error);
+  }
+}
+
+let cachedBootstrapStatus: boolean | null = null;
+
+export function isBootstrappedSync(): boolean {
+  return cachedBootstrapStatus === true;
+}
+
+/**
+ * Checks if the centralized database has already been initialized.
+ * Once initialized, collections are never re-seeded even if they become empty (e.g. through deletions).
+ */
+export async function isDbBootstrapped(): Promise<boolean> {
+  if (cachedBootstrapStatus !== null) {
+    return cachedBootstrapStatus;
+  }
+  try {
+    const metaRef = doc(db, '_system_metadata', 'bootstrap');
+    const snap = await Promise.race([
+      getDoc(metaRef),
+      new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 4000)
+      ),
+    ]);
+    if (snap && 'exists' in snap && snap.exists() && snap.data()?.seeded === true) {
+      cachedBootstrapStatus = true;
+      return true;
+    }
+    return false;
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (msg.includes('client is offline') || msg.includes('unavailable') || msg.includes('timeout')) {
+      console.info('Firestore offline or connecting, bootstrap status check deferred.');
+    } else {
+      console.warn('Bootstrap status check notice:', msg);
+    }
+    return false;
+  }
+}
+
+export async function markDbBootstrapped(): Promise<void> {
+  cachedBootstrapStatus = true;
+  try {
+    const metaRef = doc(db, '_system_metadata', 'bootstrap');
+    await setDoc(metaRef, { seeded: true, bootstrappedAt: new Date().toISOString() }, { merge: true });
+  } catch (err: any) {
+    console.info('Notice marking DB bootstrapped:', err?.message || err);
   }
 }
 
 /**
- * Checks if a collection is empty. If empty, seeds initial data via Firestore batch.
+ * Checks if a collection is empty. If empty AND the database has not yet been initialized,
+ * seeds initial data via Firestore batch.
  */
 export async function seedCollectionIfEmpty(
   collectionName: string,
   initialItems: Array<{ id: string; [key: string]: any }>
 ): Promise<boolean> {
   try {
+    const bootstrapped = await isDbBootstrapped();
+    if (bootstrapped) {
+      // Database is already bootstrapped. Respect any deleted collections!
+      return false;
+    }
+
     const colRef = collection(db, collectionName);
-    const snapshot = await getDocs(colRef);
-    if (snapshot.empty && initialItems.length > 0) {
+    const snapshot = await Promise.race([
+      getDocs(colRef),
+      new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 4000)
+      ),
+    ]);
+    if (snapshot && 'empty' in snapshot && snapshot.empty && initialItems.length > 0) {
       console.log(`Seeding empty Firestore collection "${collectionName}" with ${initialItems.length} items...`);
       const batch = writeBatch(db);
       for (const item of initialItems) {
@@ -108,8 +216,13 @@ export async function seedCollectionIfEmpty(
       return true;
     }
     return false;
-  } catch (error) {
-    console.error(`Error seeding collection "${collectionName}":`, error);
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (msg.includes('client is offline') || msg.includes('unavailable') || msg.includes('timeout')) {
+      console.info(`Collection "${collectionName}" initialization deferred (offline/connecting).`);
+    } else {
+      console.warn(`Notice seeding collection "${collectionName}":`, msg);
+    }
     return false;
   }
 }

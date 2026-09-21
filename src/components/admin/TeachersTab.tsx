@@ -25,6 +25,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 
 export const TeachersTab: React.FC = () => {
   const { teachers, students, groups, courses, addTeacher, updateTeacher } = useApp();
@@ -421,13 +422,30 @@ export const TeachersTab: React.FC = () => {
               <div>
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={teacher.profilePhoto}
-                      alt={teacher.fullName}
-                      className="w-12 h-12 rounded-xl object-cover border-2 border-blue-600"
-                    />
+                    <div className="relative shrink-0">
+                      <img
+                        src={teacher.profilePhoto}
+                        alt={teacher.fullName}
+                        className="w-12 h-12 rounded-xl object-cover border-2 border-blue-600"
+                      />
+                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
+                        <TeacherGenderIcon
+                          gender={teacher.gender}
+                          teacherName={teacher.fullName}
+                          size={15}
+                        />
+                      </div>
+                    </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-base">{teacher.fullName}</h4>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-bold text-slate-900 text-base">{teacher.fullName}</h4>
+                        <TeacherGenderIcon
+                          gender={teacher.gender}
+                          teacherName={teacher.fullName}
+                          variant="badge"
+                          size={13}
+                        />
+                      </div>
                       <span className="text-xs text-blue-600 font-medium">{teacher.specialization}</span>
                     </div>
                   </div>
@@ -576,13 +594,30 @@ export const TeachersTab: React.FC = () => {
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in duration-150">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img
-                  src={selectedTeacher.profilePhoto}
-                  alt={selectedTeacher.fullName}
-                  className="w-10 h-10 rounded-xl object-cover border border-blue-500"
-                />
+                <div className="relative shrink-0">
+                  <img
+                    src={selectedTeacher.profilePhoto}
+                    alt={selectedTeacher.fullName}
+                    className="w-10 h-10 rounded-xl object-cover border border-blue-500"
+                  />
+                  <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
+                    <TeacherGenderIcon
+                      gender={selectedTeacher.gender}
+                      teacherName={selectedTeacher.fullName}
+                      size={13}
+                    />
+                  </div>
+                </div>
                 <div>
-                  <h4 className="font-bold text-base">{selectedTeacher.fullName}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-base">{selectedTeacher.fullName}</h4>
+                    <TeacherGenderIcon
+                      gender={selectedTeacher.gender}
+                      teacherName={selectedTeacher.fullName}
+                      variant="badge"
+                      size={13}
+                    />
+                  </div>
                   <p className="text-xs text-slate-400">{selectedTeacher.specialization}</p>
                 </div>
               </div>
@@ -682,14 +717,29 @@ export const TeachersTab: React.FC = () => {
               <div className="bg-slate-900 text-white p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <img
-                      src={modalTeacher.profilePhoto}
-                      alt={modalTeacher.fullName}
-                      className="w-14 h-14 rounded-2xl object-cover border-2 border-blue-500 shadow-md"
-                    />
+                    <div className="relative shrink-0">
+                      <img
+                        src={modalTeacher.profilePhoto}
+                        alt={modalTeacher.fullName}
+                        className="w-14 h-14 rounded-2xl object-cover border-2 border-blue-500 shadow-md"
+                      />
+                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
+                        <TeacherGenderIcon
+                          gender={modalTeacher.gender}
+                          teacherName={modalTeacher.fullName}
+                          size={16}
+                        />
+                      </div>
+                    </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-lg font-bold">{modalTeacher.fullName}</h3>
+                        <TeacherGenderIcon
+                          gender={modalTeacher.gender}
+                          teacherName={modalTeacher.fullName}
+                          variant="badge"
+                          size={13}
+                        />
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           modalTeacher.status === 'active' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'
                         }`}>

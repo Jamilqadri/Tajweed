@@ -20,7 +20,8 @@ import {
   FileImage,
   ExternalLink,
 } from 'lucide-react';
-import { ClassMeetModal } from '../classroom/ClassMeetModal';
+import { GoogleMeetLauncherModal } from '../classroom/GoogleMeetLauncherModal';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 
 interface StudentDashboardProps {
   currentTab: string;
@@ -39,11 +40,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     classes,
     payments,
     submitPayment,
+    joinLiveClass,
     t,
     language,
   } = useApp();
 
   const [activeMeetClass, setActiveMeetClass] = useState<ScheduledClass | null>(null);
+
+  // Opens Google Meet summary & launcher modal
+  const handleJoinClass = (cls: ScheduledClass) => {
+    setActiveMeetClass(cls);
+  };
 
   // Fee submission form state
   const [showFeeForm, setShowFeeForm] = useState(false);
@@ -78,15 +85,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const assignedTeacher = teachers.find((t) => t.id === currentStudent.assignedTeacherId);
   const assignedGroup = currentStudent.groupId ? groups.find((g) => g.id === currentStudent.groupId) : null;
 
-  // Student classes
-  const myClasses = classes.filter(
-    (c) =>
-      c.studentId === currentStudent.id ||
-      (currentStudent.groupId && c.groupId === currentStudent.groupId)
-  );
+  // Student classes (Group classes and One-to-One classes)
+  const myClasses = classes.filter((c) => {
+    if (c.studentId === currentStudent.id) return true;
+    if (currentStudent.groupId && c.groupId === currentStudent.groupId) return true;
+    const group = groups.find((g) => g.id === c.groupId);
+    if (group && (group.studentIds?.includes(currentStudent.id) || (group as any)?.assignedStudentIds?.includes(currentStudent.id))) {
+      return true;
+    }
+    return false;
+  });
 
-  // Find next class (closest upcoming or scheduled)
-  const nextClass = myClasses.find((c) => c.status === 'scheduled' || c.status === 'live') || myClasses[0];
+  // Find next class: Prioritize any class where the teacher has joined early or that is live!
+  const liveOrTeacherJoinedClass = myClasses.find((c) => c.status === 'live' || c.teacherJoined);
+  const nextClass = liveOrTeacherJoinedClass || myClasses.find((c) => c.status === 'scheduled') || myClasses[0];
 
   // Dynamic 5-minute join window rule and clear time display
   const nextClassJoinStatus = nextClass ? getClassJoinStatus(nextClass) : null;
@@ -243,7 +255,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </td>
 
                       <td className="py-3 px-4 text-slate-600">
-                        {teacher?.fullName}
+                        <div className="flex items-center gap-1.5">
+                          <TeacherGenderIcon
+                            gender={teacher?.gender}
+                            teacherName={teacher?.fullName}
+                            size={14}
+                          />
+                          <span>{teacher?.fullName}</span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-4">
@@ -266,14 +285,45 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                       <td className="py-3 px-4 text-end">
                         {cls.status !== 'completed' ? (
-                          <button
-                            type="button"
-                            onClick={() => setActiveMeetClass(cls)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs"
-                          >
-                            <Video className="w-3.5 h-3.5" />
-                            <span>Join Meet</span>
-                          </button>
+                          (() => {
+                            const rowJoin = getClassJoinStatus(cls);
+                            return (
+                              <button
+                                type="button"
+                                disabled={!rowJoin.isAvailable}
+                                onClick={() => {
+                                  if (rowJoin.isAvailable) handleJoinClass(cls);
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all ${
+                                  rowJoin.isAvailable
+                                    ? rowJoin.teacherJoined
+                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer ring-2 ring-emerald-200'
+                                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer'
+                                    : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-75'
+                                }`}
+                                title={
+                                  rowJoin.isAvailable
+                                    ? rowJoin.teacherJoined
+                                      ? 'Teacher Present — Click to Join'
+                                      : 'Click to Join Meet'
+                                    : 'Join button opens 5 minutes before class or as soon as the teacher joins.'
+                                }
+                              >
+                                {rowJoin.isAvailable ? (
+                                  <Video className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                )}
+                                <span>
+                                  {rowJoin.isAvailable
+                                    ? rowJoin.teacherJoined
+                                      ? 'Teacher Joined'
+                                      : 'Join Meet'
+                                    : 'Opens 5m prior'}
+                                </span>
+                              </button>
+                            );
+                          })()
                         ) : (
                           <span className="text-slate-400 font-medium">Completed</span>
                         )}
@@ -658,7 +708,25 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {/* Next Upcoming Live Class Hero Box */}
       {nextClass ? (
-        <div className="bg-white rounded-3xl border-2 border-blue-200 shadow-md p-6 sm:p-8 relative overflow-hidden">
+        <div className="bg-white rounded-3xl border-2 border-blue-200 shadow-md p-6 sm:p-8 relative overflow-hidden space-y-4">
+          {nextClassJoinStatus?.teacherJoined && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-3 text-emerald-900 text-xs animate-pulse">
+              <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center shrink-0 text-white">
+                <Video className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-extrabold text-sm block">
+                  {language === 'ur' ? 'استاد کلاس روم میں موجود ہیں!' : 'Teacher Has Joined Early!'}
+                </span>
+                <span className="text-emerald-700">
+                  {language === 'ur'
+                    ? 'آپ کا لائیو کلاس روم اب کھلا ہے۔ نیچے دیے گئے بٹن پر کلک کر کے فوری طور پر شامل ہوں۔'
+                    : 'The live classroom is open now. Your Join button has been instantly unlocked — join immediately!'}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
@@ -676,7 +744,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <Clock className="w-4 h-4 text-blue-600" />
                   {nextClassJoinStatus?.formattedTimeDisplay || `${nextClass.time} (${nextClass.durationMinutes} Mins)`}
                 </span>
-                <span>Teacher: <strong>{assignedTeacher?.fullName}</strong></span>
+                <span className="flex items-center gap-1">
+                  Teacher:
+                  <strong className="inline-flex items-center gap-1 font-bold text-slate-800 ml-1">
+                    <TeacherGenderIcon
+                      gender={assignedTeacher?.gender}
+                      teacherName={assignedTeacher?.fullName}
+                      size={14}
+                    />
+                    <span>{assignedTeacher?.fullName || 'Assigned Instructor'}</span>
+                  </strong>
+                </span>
                 {assignedGroup && <span>Batch: <strong>{assignedGroup.name}</strong></span>}
               </div>
             </div>
@@ -684,33 +762,67 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             {/* Join Video Classroom Buttons & Guidance */}
             <div className="flex flex-col items-start sm:items-end gap-2.5 w-full sm:w-auto">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                {/* Primary Button: Direct In-App Video Classroom (Zero Login Barrier) */}
+                {/* Primary Button: Direct In-App Video Classroom (Clickable only 5m before or when teacher joins) */}
                 <button
                   type="button"
-                  onClick={() => setActiveMeetClass(nextClass)}
+                  disabled={!isJoinAvailable}
+                  onClick={() => {
+                    if (isJoinAvailable && nextClass) handleJoinClass(nextClass);
+                  }}
                   className={`px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${
                     isJoinAvailable
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30 ring-4 ring-blue-100 animate-pulse'
-                      : 'bg-slate-900 hover:bg-black text-white shadow-slate-900/20'
+                      ? nextClassJoinStatus?.teacherJoined
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30 ring-4 ring-emerald-200 animate-pulse cursor-pointer'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30 ring-4 ring-blue-100 animate-pulse cursor-pointer'
+                      : 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
                   }`}
-                  title="Direct Live Video Class with Camera, Audio, Screen Share & Whiteboard"
+                  title={
+                    isJoinAvailable
+                      ? nextClassJoinStatus?.teacherJoined
+                        ? 'Teacher has joined the classroom! Click to join immediately.'
+                        : 'Class time is open! Click to join video class.'
+                      : 'Students can only join 5 minutes before class time, or immediately if the teacher joins first.'
+                  }
                 >
-                  <Video className="w-5 h-5 text-white" />
+                  {isJoinAvailable ? (
+                    <Video className="w-5 h-5 text-white" />
+                  ) : (
+                    <Clock className="w-5 h-5 text-slate-400" />
+                  )}
                   <span>
-                    {language === 'ur'
-                      ? 'لائیو ویڈیو کلاس میں شامل ہوں'
-                      : 'Join Live Video Class'}
+                    {isJoinAvailable
+                      ? nextClassJoinStatus?.teacherJoined
+                        ? language === 'ur'
+                          ? 'استاد موجود ہیں — کلاس میں شامل ہوں'
+                          : 'Teacher Present — Join Live Class'
+                        : language === 'ur'
+                        ? 'لائیو ویڈیو کلاس میں شامل ہوں'
+                        : 'Join Live Video Class'
+                      : language === 'ur'
+                      ? 'کلاس میں شامل ہوں (5 منٹ قبل یا استاد کے آنے پر)'
+                      : 'Join Class (Opens 5m prior or on Teacher Join)'}
                   </span>
                 </button>
 
                 {/* Secondary Button: Alternative Room Link */}
                 <button
                   type="button"
-                  onClick={() => setActiveMeetClass(nextClass)}
-                  className="px-4 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-2 border border-slate-300 transition-colors"
-                  title="Academy Video Class Room"
+                  disabled={!isJoinAvailable}
+                  onClick={() => {
+                    if (isJoinAvailable && nextClass) handleJoinClass(nextClass);
+                  }}
+                  className={`px-4 py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 border transition-colors ${
+                    isJoinAvailable
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                  }`}
+                  title={
+                    isJoinAvailable
+                      ? 'Academy Video Class Room'
+                      : 'Locked until 5 minutes before start or teacher joins.'
+                  }
                 >
-                  <Video className="w-4 h-4 text-blue-600" />
+                  <Video className={`w-4 h-4 ${isJoinAvailable ? 'text-blue-600' : 'text-slate-400'}`} />
                   <span>
                     {language === 'ur' ? 'ویڈیو کلاس روم' : 'Video Classroom'}
                   </span>
@@ -757,8 +869,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           onClick={() => onSelectTab('my_courses')}
           className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-400 transition-all cursor-pointer"
         >
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Master Instructor</span>
-          <div className="text-base font-bold text-slate-900 mt-1">{assignedTeacher?.fullName}</div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Master Instructor</span>
+            <TeacherGenderIcon
+              gender={assignedTeacher?.gender}
+              teacherName={assignedTeacher?.fullName}
+              size={15}
+            />
+          </div>
+          <div className="text-base font-bold text-slate-900 mt-1 flex items-center gap-1.5">
+            <span>{assignedTeacher?.fullName || 'Assigned Instructor'}</span>
+          </div>
           <div className="text-xs text-emerald-600 mt-1">{assignedTeacher?.specialization}</div>
         </div>
 
@@ -775,9 +896,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       </div>
 
-      {/* Classroom Modal */}
+      {/* Google Meet Classroom Modal */}
       {activeMeetClass && (
-        <ClassMeetModal
+        <GoogleMeetLauncherModal
           classItem={activeMeetClass}
           onClose={() => setActiveMeetClass(null)}
         />

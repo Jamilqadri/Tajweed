@@ -17,7 +17,10 @@ import {
   ArrowRight,
   Shield,
   Activity,
+  Edit2,
 } from 'lucide-react';
+import { SuperAdminNameModal } from './SuperAdminNameModal';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 import { AdminManagementTab } from './AdminManagementTab';
 import { AdmissionsTab } from './AdmissionsTab';
 import { StudentsTab } from './StudentsTab';
@@ -27,7 +30,7 @@ import { GroupsTab } from './GroupsTab';
 import { ClassesTab } from './ClassesTab';
 import { FeesTab } from './FeesTab';
 import { GoogleSheetsTab } from './GoogleSheetsTab';
-import { ClassMeetModal } from '../classroom/ClassMeetModal';
+import { GoogleMeetLauncherModal } from '../classroom/GoogleMeetLauncherModal';
 
 interface AdminDashboardProps {
   currentTab: string;
@@ -48,10 +51,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     currentRole,
     currentUser,
     activityLogs,
+    joinLiveClass,
     t,
   } = useApp();
 
   const [activeMeetClass, setActiveMeetClass] = useState<ScheduledClass | null>(null);
+
+  // Opens Google Meet summary & launcher modal
+  const handleAdminJoinClass = (cls: ScheduledClass) => {
+    setActiveMeetClass(cls);
+  };
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
+  const [classScope, setClassScope] = useState<'today' | 'all'>('today');
+  const [classFilter, setClassFilter] = useState<'all' | 'group' | 'one_to_one'>('all');
 
   // Computed Metrics
   const totalStudents = students.length;
@@ -67,6 +79,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Filter today's classes
   const todayStr = '2026-09-20'; // Current simulation date
   const todaysClasses = classes.filter((c) => c.date === todayStr);
+
+  const displayedAdminClasses = classes.filter((c) => {
+    if (classScope === 'today' && c.date !== todayStr && c.status !== 'live') return false;
+    if (classFilter === 'group' && c.classType !== 'group') return false;
+    if (classFilter === 'one_to_one' && c.classType !== 'one_to_one') return false;
+    return true;
+  });
 
   // Render Sub-Views based on currentTab
   if (currentTab === 'admin_management' && currentRole === 'super_admin') {
@@ -140,6 +159,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </p>
         </div>
 
+        {currentRole === 'super_admin' && (
+          <div className="bg-gradient-to-br from-purple-50 via-white to-indigo-50/40 p-6 rounded-2xl border border-purple-200 shadow-xs space-y-4 max-w-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Super Admin Identity</h4>
+                  <p className="text-xs text-slate-500">Manage executive profile display name</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNameModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition-colors"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Change Name</span>
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-white border border-purple-100 space-y-1 text-xs">
+              <span className="text-[11px] font-bold text-purple-900 uppercase tracking-wider block">
+                Current Display Name
+              </span>
+              <span className="text-sm font-extrabold text-slate-900 block">
+                {currentUser?.name}
+              </span>
+              <span className="text-[11px] text-slate-500 block">
+                Login Email / ID: {currentUser?.email}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 max-w-xl text-xs">
           <div>
             <label className="font-bold text-slate-700 block mb-1">Academy Name</label>
@@ -197,9 +252,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="block text-sm sm:text-base font-medium text-blue-200 tracking-wide">
               Assalamu Alaikum
             </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              {currentUser?.name}
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                {currentUser?.name}
+              </h2>
+              {currentRole === 'super_admin' && (
+                <button
+                  type="button"
+                  onClick={() => setIsNameModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-semibold text-white transition-all hover:scale-105"
+                  title="Change Super Admin Name"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Change Name</span>
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-xs sm:text-sm text-blue-100">
             Overview of admissions, live classroom schedules, faculty allocations, and fee receipts.
@@ -477,24 +545,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Today's Live Classes Table */}
+      {/* Live & Scheduled Classes Table (Always visible to Admin with unrestricted join anytime) */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">{t('todaysClasses')}</h3>
-            <p className="text-xs text-slate-500">
-              Live Video Class sessions scheduled for today ({todayStr})
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900">Class Sessions & Live Desk</h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Join Anytime (No Time Restrictions)
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Both Group Classes and One-to-One Classes are always visible. Admins can join any live room at any time.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onSelectTab('classes')}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800"
-          >
-            <span>View Full Schedule</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Scope Toggle: Today vs All */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setClassScope('today')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                  classScope === 'today' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Today ({todaysClasses.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setClassScope('all')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                  classScope === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                All Classes ({classes.length})
+              </button>
+            </div>
+
+            {/* Type Filter */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setClassFilter('all')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  classFilter === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setClassFilter('group')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  classFilter === 'group' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Group
+              </button>
+              <button
+                type="button"
+                onClick={() => setClassFilter('one_to_one')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  classFilter === 'one_to_one' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                1-on-1
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('classes')}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 ml-2"
+            >
+              <span>Schedule Desk</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -504,21 +632,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <th className="py-3 px-4 text-start">Student / Group</th>
                 <th className="py-3 px-4 text-start">Course</th>
                 <th className="py-3 px-4 text-start">Teacher</th>
-                <th className="py-3 px-4 text-start">Time</th>
+                <th className="py-3 px-4 text-start">Date & Time</th>
                 <th className="py-3 px-4 text-start">Class Type</th>
                 <th className="py-3 px-4 text-center">{t('googleMeet')}</th>
                 <th className="py-3 px-4 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {todaysClasses.length === 0 ? (
+              {displayedAdminClasses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-slate-400">
-                    No classes scheduled for today.
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                    No classes found for the selected view.
                   </td>
                 </tr>
               ) : (
-                todaysClasses.map((cls) => {
+                displayedAdminClasses.map((cls) => {
                   const course = courses.find((c) => c.id === cls.courseId);
                   const teacher = teachers.find((t) => t.id === cls.teacherId);
                   const group = cls.groupId ? groups.find((g) => g.id === cls.groupId) : null;
@@ -535,11 +663,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </td>
 
                       <td className="py-3 px-4 text-slate-700">
-                        {teacher?.fullName}
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <TeacherGenderIcon
+                            gender={teacher?.gender}
+                            teacherName={teacher?.fullName}
+                            size={16}
+                          />
+                          <span>{teacher?.fullName || 'Unassigned'}</span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-4 font-semibold text-blue-900">
-                        {cls.time} ({cls.durationMinutes}m)
+                        <div>{cls.date}</div>
+                        <div className="text-[11px] text-slate-500">{cls.time} ({cls.durationMinutes}m)</div>
                       </td>
 
                       <td className="py-3 px-4">
@@ -551,25 +687,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <td className="py-3 px-4 text-center">
                         <button
                           type="button"
-                          onClick={() => setActiveMeetClass(cls)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs"
+                          onClick={() => handleAdminJoinClass(cls)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs"
+                          title="Admin Access: You can join this live room anytime without time restrictions."
                         >
                           <Video className="w-3.5 h-3.5" />
-                          <span>Join Meet</span>
+                          <span>Join Live Room (Anytime)</span>
                         </button>
                       </td>
 
                       <td className="py-3 px-4 text-center">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            cls.status === 'live'
+                            cls.status === 'live' || cls.teacherJoined
                               ? 'bg-red-100 text-red-800 animate-pulse'
                               : cls.status === 'completed'
                               ? 'bg-slate-100 text-slate-600'
                               : 'bg-emerald-100 text-emerald-800'
                           }`}
                         >
-                          {cls.status.toUpperCase()}
+                          {cls.status === 'live' || cls.teacherJoined ? 'LIVE IN SESSION' : cls.status.toUpperCase()}
                         </span>
                       </td>
                     </tr>
@@ -583,11 +720,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Classroom Modal */}
       {activeMeetClass && (
-        <ClassMeetModal
+        <GoogleMeetLauncherModal
           classItem={activeMeetClass}
           onClose={() => setActiveMeetClass(null)}
         />
       )}
+
+      {/* Super Admin Name Modal */}
+      <SuperAdminNameModal
+        isOpen={isNameModalOpen}
+        onClose={() => setIsNameModalOpen(false)}
+      />
     </div>
   );
 };

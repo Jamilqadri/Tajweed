@@ -15,7 +15,9 @@ import {
   Phone,
   MapPin,
   Check,
+  Trash2,
 } from 'lucide-react';
+import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
 
 export const AdmissionsTab: React.FC = () => {
   const {
@@ -26,12 +28,14 @@ export const AdmissionsTab: React.FC = () => {
     verifyAdmission,
     rejectAdmission,
     checkTeacherConflict,
+    currentRole,
     t,
   } = useApp();
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('pending');
   const [selectedAdmission, setSelectedAdmission] = useState<Admission | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [deletingAdmission, setDeletingAdmission] = useState<Admission | null>(null);
 
   // Verification Assignment Form State
   const [assignCourseId, setAssignCourseId] = useState('');
@@ -284,6 +288,17 @@ export const AdmissionsTab: React.FC = () => {
                               </button>
                             </>
                           )}
+
+                          {currentRole === 'super_admin' && (
+                            <button
+                              type="button"
+                              onClick={() => setDeletingAdmission(adm)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Permanently Delete Student Record"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -294,6 +309,17 @@ export const AdmissionsTab: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Super Admin Direct Delete Modal */}
+      {deletingAdmission && (
+        <SuperAdminDeleteModal
+          isOpen={!!deletingAdmission}
+          onClose={() => setDeletingAdmission(null)}
+          entity={deletingAdmission}
+          entityType="student"
+          onSuccess={() => setDeletingAdmission(null)}
+        />
+      )}
 
       {/* Verification & Assignment Modal */}
       {isVerifying && selectedAdmission && (

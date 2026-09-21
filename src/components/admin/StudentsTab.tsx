@@ -16,16 +16,20 @@ import {
   X,
   CreditCard,
   Trash2,
+  UserCheck,
 } from 'lucide-react';
 import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
+import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 
 export const StudentsTab: React.FC = () => {
-  const { students, courses, teachers, groups, updateStudentStatus } = useApp();
+  const { students, courses, teachers, groups, updateStudentStatus, transferStudentTeacher } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
+  const [reassigningStudent, setReassigningStudent] = useState<Student | null>(null);
+  const [selectedNewTeacherId, setSelectedNewTeacherId] = useState<string>('');
 
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
@@ -149,11 +153,20 @@ export const StudentsTab: React.FC = () => {
                       <td className="py-3.5 px-4">
                         {teacher ? (
                           <div className="flex items-center gap-2">
-                            <img
-                              src={teacher.profilePhoto}
-                              alt={teacher.fullName}
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
+                            <div className="relative shrink-0">
+                              <img
+                                src={teacher.profilePhoto}
+                                alt={teacher.fullName}
+                                className="w-6 h-6 rounded-full object-cover"
+                              />
+                              <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-2xs">
+                                <TeacherGenderIcon
+                                  gender={teacher.gender}
+                                  teacherName={teacher.fullName}
+                                  size={10}
+                                />
+                              </div>
+                            </div>
                             <span className="font-semibold text-slate-800">{teacher.fullName}</span>
                           </div>
                         ) : (
@@ -206,6 +219,17 @@ export const StudentsTab: React.FC = () => {
 
                       <td className="py-3.5 px-4 text-end">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReassigningStudent(student);
+                              setSelectedNewTeacherId(student.assignedTeacherId || teachers[0]?.id || '');
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Reassign Teacher (استاد کی تبدیلی)"
+                          >
+                            <UserCheck className="w-4 h-4" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setSelectedStudent(student)}
@@ -322,8 +346,13 @@ export const StudentsTab: React.FC = () => {
                   <div>
                     <span className="text-slate-500 block">Assigned Teacher:</span>
                     {teachers.find((t) => t.id === selectedStudent.assignedTeacherId) ? (
-                      <span className="font-bold text-slate-900">
-                        {teachers.find((t) => t.id === selectedStudent.assignedTeacherId)?.fullName}
+                      <span className="font-bold text-slate-900 inline-flex items-center gap-1.5 mt-0.5">
+                        <TeacherGenderIcon
+                          gender={teachers.find((t) => t.id === selectedStudent.assignedTeacherId)?.gender}
+                          teacherName={teachers.find((t) => t.id === selectedStudent.assignedTeacherId)?.fullName}
+                          size={13}
+                        />
+                        <span>{teachers.find((t) => t.id === selectedStudent.assignedTeacherId)?.fullName}</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
@@ -375,6 +404,89 @@ export const StudentsTab: React.FC = () => {
                 Done
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reassign Teacher Modal */}
+      {reassigningStudent && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in duration-150">
+            <div className="bg-emerald-800 text-white p-5 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-emerald-300 font-bold uppercase">Academic Management</span>
+                <h4 className="text-lg font-bold">استاد کی تبدیلی / Reassign Teacher</h4>
+                <p className="text-xs text-emerald-100 font-mono">
+                  {reassigningStudent.fullName} ({reassigningStudent.studentId})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassigningStudent(null)}
+                className="text-white/80 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!selectedNewTeacherId) return;
+                transferStudentTeacher(reassigningStudent.id, selectedNewTeacherId);
+                setReassigningStudent(null);
+              }}
+              className="p-6 space-y-4 text-xs"
+            >
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <div className="text-slate-500">طالب علم کا موجودہ استاد / Current Teacher:</div>
+                <div className="font-bold text-slate-800 text-sm">
+                  {teachers.find((t) => t.id === reassigningStudent.assignedTeacherId)?.fullName || 'Not Assigned'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1.5">
+                  نیا استاد منتخب کریں / Select New Teacher *
+                </label>
+                <select
+                  required
+                  value={selectedNewTeacherId}
+                  onChange={(e) => setSelectedNewTeacherId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                >
+                  <option value="" disabled>
+                    -- استاد کا انتخاب کریں --
+                  </option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.gender === 'female' ? '👩‍🏫 ' : '👨‍🏫 '}
+                      {t.fullName} ({t.assignedStudentIds?.length || 0} طلباء)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-[11px] leading-relaxed">
+                استاد کی تبدیلی سے طالب علم کی تمام کلاسز، گوگل میٹ سیشنز، اور حاضری خود بخود نئے استاد کے پورٹل پر منتقل ہو جائیں گی۔
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReassigningStudent(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"
+                >
+                  منسوخ کریں (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20"
+                >
+                  تبدیلی محفوظ کریں (Save Reassignment)
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

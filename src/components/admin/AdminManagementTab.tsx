@@ -15,13 +15,15 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
+import { SuperAdminNameModal } from './SuperAdminNameModal';
 
 export const AdminManagementTab: React.FC = () => {
-  const { admins, addAdmin, updateAdmin, deleteAdmin, t } = useApp();
+  const { admins, addAdmin, updateAdmin, deleteAdmin, currentUser, t } = useApp();
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null);
   const [deletingAdmin, setDeletingAdmin] = useState<Admin | null>(null);
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
 
   // Form State
   const [fullName, setFullName] = useState('');
@@ -150,6 +152,40 @@ export const AdminManagementTab: React.FC = () => {
             <span>Create New Admin</span>
           </button>
         )}
+      </div>
+
+      {/* Super Admin Identity Box with Change Name Option */}
+      <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 rounded-2xl p-5 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-purple-500/30 border border-purple-400/40 flex items-center justify-center text-purple-200">
+            <Shield className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
+                Super Admin Account
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                Full System Control
+              </span>
+            </div>
+            <h4 className="text-lg font-extrabold text-white mt-0.5">
+              {currentUser?.name}
+            </h4>
+            <p className="text-xs text-purple-200">
+              Email: {currentUser?.email || 'superadmin@kanzutajweed.com'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsNameModalOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-bold text-white transition-all shadow-xs"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+          <span>Change Super Admin Name</span>
+        </button>
       </div>
 
       {/* Create / Edit Form Modal/Panel */}
@@ -435,6 +471,12 @@ export const AdminManagementTab: React.FC = () => {
         onClose={() => setDeletingAdmin(null)}
         entityType="admin"
         entity={deletingAdmin}
+      />
+
+      {/* Super Admin Name Modal */}
+      <SuperAdminNameModal
+        isOpen={isNameModalOpen}
+        onClose={() => setIsNameModalOpen(false)}
       />
     </div>
   );
