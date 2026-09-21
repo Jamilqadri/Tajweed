@@ -90,6 +90,18 @@ export const AdmissionsTab: React.FC = () => {
     e.preventDefault();
     if (!selectedAdmission) return;
 
+    if (assignClassType === 'group' && assignGroupId) {
+      const targetGroup = groups.find((g) => g.id === assignGroupId);
+      if (targetGroup) {
+        const curCount = targetGroup.studentIds?.length ?? 0;
+        const maxCap = targetGroup.maxCapacity || targetGroup.capacity || 10;
+        if (curCount >= maxCap) {
+          setConflictWarning(`Selected group "${targetGroup.name}" has reached its maximum capacity of ${maxCap} students. Only up to that number of students can be assigned.`);
+          return;
+        }
+      }
+    }
+
     if (assignClassType === 'one_to_one') {
       const conflict = checkTeacherConflict(assignTeacherId, '2026-09-20', assignSlotTime, 'one_to_one');
       if (conflict.hasConflict) {
@@ -378,7 +390,7 @@ export const AdmissionsTab: React.FC = () => {
                     onChange={(e) => handleClassTypeChange(e.target.value as ClassType)}
                     className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs font-semibold"
                   >
-                    <option value="group">Group Class (Max 10)</option>
+                    <option value="group">Group Class (Interactive Batch)</option>
                     <option value="one_to_one">One-to-One Class</option>
                   </select>
                 </div>
@@ -423,18 +435,23 @@ export const AdmissionsTab: React.FC = () => {
                 {assignClassType === 'group' ? (
                   <div className="col-span-2">
                     <label className="block font-bold text-slate-700 mb-1">
-                      Select Cohort / Group (Max 10 Students)
+                      Select Cohort / Group
                     </label>
                     <select
                       value={assignGroupId}
                       onChange={(e) => setAssignGroupId(e.target.value)}
                       className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs"
                     >
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name} ({g.studentIds?.length ?? 0}/{g.maxCapacity || g.capacity || 10} Students • {g.scheduleDays?.join(', ') || g.days?.join(', ') || 'Weekly'} @ {g.scheduleTime || g.startTime || '19:00'})
-                        </option>
-                      ))}
+                      {groups.map((g) => {
+                        const cur = g.studentIds?.length ?? 0;
+                        const cap = g.maxCapacity || g.capacity || 10;
+                        const isFull = cur >= cap;
+                        return (
+                          <option key={g.id} value={g.id} disabled={isFull}>
+                            {g.name} ({cur}/{cap} Students{isFull ? ' - FULL' : ''} • {g.scheduleDays?.join(', ') || g.days?.join(', ') || 'Weekly'} @ {g.scheduleTime || g.startTime || '19:00'})
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 ) : (

@@ -22,7 +22,7 @@ import {
 import { User } from 'firebase/auth';
 
 export const GoogleMeetSettingsCard: React.FC = () => {
-  const { groups, students, classes, syncAllMeetLinks, language } = useApp();
+  const { groups, students, classes, syncAllMeetLinks, syncGroupCalendarAndMeet, language } = useApp();
 
   const [googleUser, setGoogleUser] = useState<User | null>(null);
   const [hasToken, setHasToken] = useState<boolean>(false);
@@ -81,15 +81,29 @@ export const GoogleMeetSettingsCard: React.FC = () => {
       setIsSyncing(true);
       setSyncResult(null);
       setErrorMessage(null);
+
+      // 1. Sync all Meet links across Firestore collections
       const count = await syncAllMeetLinks();
+
+      // 2. Automatically sync Google Calendar events for any groups missing them
+      let calCount = 0;
+      for (const grp of groups) {
+        if (grp.teacherId && (!grp.calendarEventId || !grp.meetLink)) {
+          const res = await syncGroupCalendarAndMeet(grp.id);
+          if (res.success) {
+            calCount++;
+          }
+        }
+      }
+
       setSyncResult(
         language === 'ur'
-          ? `کامیابی! تمام ${count} کلاسوں اور گروپس کے منفرد گوگل میٹ لنکس بن کر فائر اسٹور میں محفوظ ہو گئے۔`
-          : `Success! Synchronized unique Google Meet links for all ${count} groups, 1-on-1 students, and classes to Firestore.`
+          ? `کامیابی! تمام میٹنگ لنکس اور ${calCount} گوگل کیلنڈر ایونٹس اپ ڈیٹ ہو گئے۔`
+          : `Success! Synchronized Google Meet links for ${count} items and created/updated ${calCount} Google Calendar events (Super Admin Host, Teacher Co-host, Students invited).`
       );
     } catch (err: any) {
       console.error('Sync error:', err);
-      setErrorMessage(err?.message || 'Failed to sync Google Meet links.');
+      setErrorMessage(err?.message || 'Failed to sync Google Meet & Calendar.');
     } finally {
       setIsSyncing(false);
     }
@@ -219,8 +233,8 @@ export const GoogleMeetSettingsCard: React.FC = () => {
 
         {/* Sync All Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-blue-200/70">
-          <div className="text-xs text-blue-900">
-            <strong>Automatic Provisioning:</strong> Generate or refresh unique Google Meet links for every Group Class and One-to-One student class, updating Firestore so teacher and students join the exact same link.
+          <div className="text-xs text-blue-900 max-w-xl">
+            <strong>Automatic Calendar & Meet Management:</strong> Creates recurring Google Calendar events for Groups and separate 1-on-1 events with Super Admin as Host, Teacher as Co-host, and registered students as Attendees. All group students automatically inherit the same Google Meet link.
           </div>
 
           <button

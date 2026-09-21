@@ -15,16 +15,29 @@ import {
   Video,
   ExternalLink,
   Copy,
+  RotateCw,
+  CalendarCheck,
 } from 'lucide-react';
 import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 import { isRealGoogleMeetLink } from '../../lib/googleMeetService';
 
 export const GroupsTab: React.FC = () => {
-  const { groups, courses, teachers, students, addGroup, updateGroup, deleteGroup } = useApp();
+  const {
+    groups,
+    courses,
+    teachers,
+    students,
+    addGroup,
+    updateGroup,
+    deleteGroup,
+    syncGroupCalendarAndMeet,
+  } = useApp();
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [syncingGroupId, setSyncingGroupId] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{ id: string; message: string; isError?: boolean } | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -51,6 +64,8 @@ export const GroupsTab: React.FC = () => {
     e.preventDefault();
     if (!name || !courseId || !teacherId) return;
 
+    const parsedCapacity = Math.max(1, Number(maxCapacity) || 10);
+
     if (editingGroup) {
       updateGroup(editingGroup.id, {
         name,
@@ -58,7 +73,8 @@ export const GroupsTab: React.FC = () => {
         teacherId,
         scheduleDays: scheduleDays.split(',').map((s) => s.trim()),
         scheduleTime,
-        maxCapacity: Math.min(10, Number(maxCapacity)),
+        capacity: parsedCapacity,
+        maxCapacity: parsedCapacity,
         meetLink: meetLink.trim(),
       });
     } else {
@@ -69,12 +85,41 @@ export const GroupsTab: React.FC = () => {
         studentIds: [],
         scheduleDays: scheduleDays.split(',').map((s) => s.trim()),
         scheduleTime,
-        maxCapacity: Math.min(10, Number(maxCapacity)),
+        capacity: parsedCapacity,
+        maxCapacity: parsedCapacity,
         status: 'active',
         meetLink: meetLink.trim(),
       });
     }
     resetForm();
+  };
+
+  const handleSyncCalendar = async (group: Group) => {
+    setSyncingGroupId(group.id);
+    setSyncFeedback(null);
+    try {
+      const res = await syncGroupCalendarAndMeet(group.id);
+      if (res.success) {
+        setSyncFeedback({
+          id: group.id,
+          message: `Google Calendar & Meet synced successfully! Meet: ${res.meetLink}`,
+        });
+      } else {
+        setSyncFeedback({
+          id: group.id,
+          message: res.error || 'Failed to sync Google Calendar event.',
+          isError: true,
+        });
+      }
+    } catch (err: any) {
+      setSyncFeedback({
+        id: group.id,
+        message: err?.message || 'Error syncing Google Calendar.',
+        isError: true,
+      });
+    } finally {
+      setSyncingGroupId(null);
+    }
   };
 
   const startEdit = (group: Group) => {
@@ -99,7 +144,7 @@ export const GroupsTab: React.FC = () => {
             <h3 className="text-xl font-bold text-slate-900">Group Cohorts</h3>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Manage interactive group classes (strictly capped at maximum 10 students per batch).
+            Manage interactive group classes with custom student capacity, automated Google Calendar events, and real Google Meet rooms.
           </p>
         </div>
 
@@ -198,15 +243,18 @@ export const GroupsTab: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Max Capacity (Max 10)</label>
+              <label className="block font-bold text-slate-700 mb-1">Maximum Students</label>
               <input
                 type="number"
                 min={1}
-                max={10}
                 value={maxCapacity}
-                onChange={(e) => setMaxCapacity(Math.min(10, Number(e.target.value)))}
+                onChange={(e) => setMaxCapacity(Math.max(1, Number(e.target.value) || 1))}
+                placeholder="e.g. 5, 10, 15, 20..."
                 className="w-full p-2.5 rounded-lg border border-slate-300 text-slate-900"
               />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Admin can enter any required capacity, such as 5, 10, 15, 20, etc. Only up to that number of students can be assigned to the Group.
+              </p>
             </div>
 
             <div className="sm:col-span-3">
@@ -361,6 +409,60 @@ export const GroupsTab: React.FC = () => {
                     </a>
                   </div>
                 </div>
+
+                {/* Google Calendar Integration Row */}
+                <div className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CalendarCheck className={`w-4 h-4 shrink-0 ${group.calendarEventId ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Google Calendar</div>
+                      <div className="text-[11px] font-medium text-slate-800 truncate">
+                        {group.calendarEventId ? (
+                          <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
+                            Event Scheduled
+                            {group.calendarHtmlLink && (
+                              <a
+                                href={group.calendarHtmlLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline inline-flex items-center"
+                                title="Open in Google Calendar"
+                              >
+                                <ExternalLink className="w-3 h-3 ml-0.5" />
+                              </a>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Not scheduled yet</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSyncCalendar(group)}
+                    disabled={syncingGroupId === group.id}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors shadow-2xs disabled:opacity-50"
+                    title="Automatically create/update Google Calendar event with Super Admin as Host, Teacher as Co-host, and Students as Attendees"
+                  >
+                    <RotateCw className={`w-3 h-3 ${syncingGroupId === group.id ? 'animate-spin text-blue-600' : ''}`} />
+                    <span>{syncingGroupId === group.id ? 'Syncing...' : group.calendarEventId ? 'Resync' : 'Sync Calendar'}</span>
+                  </button>
+                </div>
+
+                {/* Feedback banner */}
+                {syncFeedback && syncFeedback.id === group.id && (
+                  <div
+                    className={`mt-2 p-2 rounded-lg text-[11px] ${
+                      syncFeedback.isError
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    {syncFeedback.message}
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">

@@ -22,10 +22,7 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldAlert,
-  Trash2,
 } from 'lucide-react';
-import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
-import { TeacherGenderIcon } from '../common/TeacherGenderIcon';
 
 export const TeachersTab: React.FC = () => {
   const { teachers, students, groups, courses, addTeacher, updateTeacher } = useApp();
@@ -35,7 +32,6 @@ export const TeachersTab: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
-  const [deletingTeacher, setDeletingTeacher] = useState<Teacher | null>(null);
 
   // Form State
   const [fullName, setFullName] = useState('');
@@ -52,6 +48,7 @@ export const TeachersTab: React.FC = () => {
   const [experience, setExperience] = useState('');
   const [languages, setLanguages] = useState('English, Urdu, Arabic');
   const [specialization, setSpecialization] = useState('Hafs an Asim');
+  const [customUserId, setCustomUserId] = useState('');
   const [initialPassword, setInitialPassword] = useState('teacher123');
 
   const resetForm = () => {
@@ -66,6 +63,7 @@ export const TeachersTab: React.FC = () => {
     setQualification('');
     setTajweedQualification('');
     setExperience('');
+    setCustomUserId('');
     setInitialPassword('teacher123');
     setIsCreating(false);
     setEditingTeacher(null);
@@ -75,15 +73,13 @@ export const TeachersTab: React.FC = () => {
     e.preventDefault();
     if (!fullName || !mobile || !email) return;
 
-    const cleanEmail = email.trim().toLowerCase();
-
     if (editingTeacher) {
       updateTeacher(editingTeacher.id, {
         fullName,
         fatherName,
         mobile,
         whatsapp,
-        email: cleanEmail,
+        email,
         gender,
         city,
         state,
@@ -104,7 +100,7 @@ export const TeachersTab: React.FC = () => {
           joiningDate: new Date().toISOString().split('T')[0],
           mobile,
           whatsapp: whatsapp || mobile,
-          email: cleanEmail,
+          email,
           gender,
           city,
           state,
@@ -123,7 +119,8 @@ export const TeachersTab: React.FC = () => {
           ],
           initialPassword: initialPassword || 'teacher123',
         },
-        initialPassword || 'teacher123'
+        initialPassword || 'teacher123',
+        email.trim().toLowerCase()
       );
     }
     resetForm();
@@ -145,6 +142,7 @@ export const TeachersTab: React.FC = () => {
     setExperience(teacher.experience);
     setLanguages(teacher.languages.join(', '));
     setSpecialization(teacher.specialization);
+    setCustomUserId(teacher.teacherId || '');
     setInitialPassword(teacher.initialPassword || 'teacher123');
     setIsCreating(true);
   };
@@ -258,11 +256,11 @@ export const TeachersTab: React.FC = () => {
               />
             </div>
 
-            {/* Custom Credentials Section */}
+            {/* Login Credentials Section */}
             <div className="sm:col-span-3 bg-blue-50/80 border border-blue-200 rounded-xl p-3.5">
-              <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="font-bold text-blue-900 text-xs">
-                  Teacher Login Credentials / استاد کی لاگ ان اسناد
+                  Teacher Login Credentials / استاد کا لاگ ان اور پاسورڈ
                 </span>
                 <span className="text-[10px] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-medium">
                   Email = Login ID
@@ -271,19 +269,19 @@ export const TeachersTab: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="block font-semibold text-slate-800 mb-1">
-                    Login ID (ای میل لاگ ان آئی ڈی)
+                    Login Email ID / لاگ ان ای میل آئی ڈی
                   </label>
-                  <div className="w-full p-2.5 rounded-lg border border-blue-200 bg-white text-slate-700 font-mono text-xs flex items-center justify-between">
-                    <span className="truncate">{email.trim() || 'teacher.email@kanzutajweed.com'}</span>
-                    <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium">Fixed to Email</span>
+                  <div className="w-full p-2.5 rounded-lg border border-blue-200 bg-white/90 text-slate-700 font-mono text-xs flex items-center justify-between">
+                    <span className="truncate">{email || 'Enter email above (مندرجہ بالا ای میل درج کریں)'}</span>
+                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded shrink-0">Login ID</span>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1">
-                    استاد کا لاگ ان آئی ڈی ان کی ای میل ہوگی (کوئی الگ یوزر آئی ڈی نہیں ہے)
+                    استاد کا ای میل آئی ڈی ہی ان کا لاگ ان یوزر آئی ڈی ہوگا، الگ یوزر آئی ڈی کی ضرورت نہیں
                   </p>
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-800 mb-1">
-                    Initial Password / ابتدائی پاسورڈ <span className="text-red-500">*</span>
+                    Password / لاگ ان پاسورڈ <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -294,7 +292,7 @@ export const TeachersTab: React.FC = () => {
                     className="w-full p-2.5 rounded-lg border border-blue-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-blue-200"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
-                    ایڈمن استاد کے لیے ابتدائی پاسورڈ مقرر کرے (بعد میں تبدیل کیا جا سکتا ہے)
+                    سپر ایڈمن استاد کے لیے یہاں پاسورڈ مقرر کریں (بعد میں استاد خود تبدیل کر سکتے ہیں)
                   </p>
                 </div>
               </div>
@@ -422,30 +420,13 @@ export const TeachersTab: React.FC = () => {
               <div>
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="relative shrink-0">
-                      <img
-                        src={teacher.profilePhoto}
-                        alt={teacher.fullName}
-                        className="w-12 h-12 rounded-xl object-cover border-2 border-blue-600"
-                      />
-                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
-                        <TeacherGenderIcon
-                          gender={teacher.gender}
-                          teacherName={teacher.fullName}
-                          size={15}
-                        />
-                      </div>
-                    </div>
+                    <img
+                      src={teacher.profilePhoto}
+                      alt={teacher.fullName}
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-blue-600"
+                    />
                     <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="font-bold text-slate-900 text-base">{teacher.fullName}</h4>
-                        <TeacherGenderIcon
-                          gender={teacher.gender}
-                          teacherName={teacher.fullName}
-                          variant="badge"
-                          size={13}
-                        />
-                      </div>
+                      <h4 className="font-bold text-slate-900 text-base">{teacher.fullName}</h4>
                       <span className="text-xs text-blue-600 font-medium">{teacher.specialization}</span>
                     </div>
                   </div>
@@ -474,10 +455,19 @@ export const TeachersTab: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-blue-950 flex items-center gap-1">
                       <Mail className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Login ID (Email):</span>
+                      <span>Login Email:</span>
                     </span>
                     <span className="font-medium text-slate-800 text-[11px] truncate max-w-[160px]" title={teacher.email}>
                       {teacher.email}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Teacher ID:</span>
+                    </span>
+                    <span className="font-mono bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                      {teacher.teacherId || teacher.userId || teacher.id}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -493,7 +483,7 @@ export const TeachersTab: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const creds = `Kanz-ul-Tajweed Teacher Login:\nLogin ID (Email): ${teacher.email}\nPassword: ${teacher.initialPassword || 'teacher123'}`;
+                        const creds = `Kanz-ul-Tajweed Teacher Login:\nEmail: ${teacher.email}\nPassword: ${teacher.initialPassword || 'teacher123'}\nTeacher ID: ${teacher.teacherId}`;
                         navigator.clipboard.writeText(creds);
                         setCopiedId(teacher.id);
                         setTimeout(() => setCopiedId(null), 2500);
@@ -573,14 +563,6 @@ export const TeachersTab: React.FC = () => {
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeletingTeacher(teacher)}
-                    className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete Teacher"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -594,30 +576,13 @@ export const TeachersTab: React.FC = () => {
           <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in duration-150">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="relative shrink-0">
-                  <img
-                    src={selectedTeacher.profilePhoto}
-                    alt={selectedTeacher.fullName}
-                    className="w-10 h-10 rounded-xl object-cover border border-blue-500"
-                  />
-                  <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
-                    <TeacherGenderIcon
-                      gender={selectedTeacher.gender}
-                      teacherName={selectedTeacher.fullName}
-                      size={13}
-                    />
-                  </div>
-                </div>
+                <img
+                  src={selectedTeacher.profilePhoto}
+                  alt={selectedTeacher.fullName}
+                  className="w-10 h-10 rounded-xl object-cover border border-blue-500"
+                />
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-base">{selectedTeacher.fullName}</h4>
-                    <TeacherGenderIcon
-                      gender={selectedTeacher.gender}
-                      teacherName={selectedTeacher.fullName}
-                      variant="badge"
-                      size={13}
-                    />
-                  </div>
+                  <h4 className="font-bold text-base">{selectedTeacher.fullName}</h4>
                   <p className="text-xs text-slate-400">{selectedTeacher.specialization}</p>
                 </div>
               </div>
@@ -717,29 +682,14 @@ export const TeachersTab: React.FC = () => {
               <div className="bg-slate-900 text-white p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="relative shrink-0">
-                      <img
-                        src={modalTeacher.profilePhoto}
-                        alt={modalTeacher.fullName}
-                        className="w-14 h-14 rounded-2xl object-cover border-2 border-blue-500 shadow-md"
-                      />
-                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
-                        <TeacherGenderIcon
-                          gender={modalTeacher.gender}
-                          teacherName={modalTeacher.fullName}
-                          size={16}
-                        />
-                      </div>
-                    </div>
+                    <img
+                      src={modalTeacher.profilePhoto}
+                      alt={modalTeacher.fullName}
+                      className="w-14 h-14 rounded-2xl object-cover border-2 border-blue-500 shadow-md"
+                    />
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
                         <h3 className="text-lg font-bold">{modalTeacher.fullName}</h3>
-                        <TeacherGenderIcon
-                          gender={modalTeacher.gender}
-                          teacherName={modalTeacher.fullName}
-                          variant="badge"
-                          size={13}
-                        />
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           modalTeacher.status === 'active' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'
                         }`}>
@@ -1063,14 +1013,6 @@ export const TeachersTab: React.FC = () => {
           </div>
         );
       })()}
-
-      {/* Super Admin Delete Modal for Teacher */}
-      <SuperAdminDeleteModal
-        isOpen={!!deletingTeacher}
-        onClose={() => setDeletingTeacher(null)}
-        entityType="teacher"
-        entity={deletingTeacher}
-      />
     </div>
   );
 };

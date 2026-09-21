@@ -14,21 +14,18 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
-import { SuperAdminDeleteModal } from './SuperAdminDeleteModal';
-import { SuperAdminNameModal } from './SuperAdminNameModal';
 
 export const AdminManagementTab: React.FC = () => {
-  const { admins, addAdmin, updateAdmin, deleteAdmin, currentUser, t } = useApp();
+  const { admins, addAdmin, updateAdmin, deleteAdmin, t } = useApp();
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null);
-  const [deletingAdmin, setDeletingAdmin] = useState<Admin | null>(null);
-  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
 
   // Form State
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
+  const [adminUserId, setAdminUserId] = useState('');
   const [adminPassword, setAdminPassword] = useState('admin123');
   const [permissions, setPermissions] = useState<AdminPermissions>({
     admissions: true,
@@ -47,6 +44,7 @@ export const AdminManagementTab: React.FC = () => {
     setFullName('');
     setEmail('');
     setMobile('');
+    setAdminUserId('');
     setAdminPassword('admin123');
     setPermissions({
       admissions: true,
@@ -70,10 +68,11 @@ export const AdminManagementTab: React.FC = () => {
 
     addAdmin({
       fullName,
-      email: email.trim().toLowerCase(),
+      email,
       mobile,
       permissions,
       status: 'active',
+      userId: email.trim().toLowerCase(),
       initialPassword: adminPassword || 'admin123',
     });
     resetForm();
@@ -85,7 +84,7 @@ export const AdminManagementTab: React.FC = () => {
 
     updateAdmin(editingAdmin.id, {
       fullName,
-      email: email.trim().toLowerCase(),
+      email,
       mobile,
       permissions,
       initialPassword: adminPassword || 'admin123',
@@ -98,6 +97,7 @@ export const AdminManagementTab: React.FC = () => {
     setFullName(admin.fullName || admin.name || '');
     setEmail(admin.email);
     setMobile(admin.mobile || admin.phone || '');
+    setAdminUserId(admin.id || admin.userId || '');
     setAdminPassword((admin as any).initialPassword || 'admin123');
     setPermissions({
       downloadRecordings: false,
@@ -152,40 +152,6 @@ export const AdminManagementTab: React.FC = () => {
             <span>Create New Admin</span>
           </button>
         )}
-      </div>
-
-      {/* Super Admin Identity Box with Change Name Option */}
-      <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 rounded-2xl p-5 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/30 border border-purple-400/40 flex items-center justify-center text-purple-200">
-            <Shield className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                Super Admin Account
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/30 text-purple-200 border border-purple-400/30">
-                Full System Control
-              </span>
-            </div>
-            <h4 className="text-lg font-extrabold text-white mt-0.5">
-              {currentUser?.name}
-            </h4>
-            <p className="text-xs text-purple-200">
-              Email: {currentUser?.email || 'superadmin@kanzutajweed.com'}
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsNameModalOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-bold text-white transition-all shadow-xs"
-        >
-          <Edit2 className="w-3.5 h-3.5" />
-          <span>Change Super Admin Name</span>
-        </button>
       </div>
 
       {/* Create / Edit Form Modal/Panel */}
@@ -253,9 +219,9 @@ export const AdminManagementTab: React.FC = () => {
 
           {/* Login Credentials Section */}
           <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3.5">
-            <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2">
               <span className="font-bold text-purple-900 text-xs">
-                Admin Login Credentials / ایڈمن لاگ ان اسناد
+                Admin Login Credentials / ایڈمن کا لاگ ان اور پاسورڈ
               </span>
               <span className="text-[10px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-medium">
                 Email = Login ID
@@ -264,19 +230,19 @@ export const AdminManagementTab: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">
-                  Login ID (ای میل لاگ ان آئی ڈی)
+                  Login Email ID / لاگ ان ای میل آئی ڈی
                 </label>
-                <div className="w-full p-2.5 rounded-lg border border-purple-200 bg-white text-slate-700 font-mono text-xs flex items-center justify-between">
-                  <span className="truncate">{email.trim() || 'official.email@kanzutajweed.com'}</span>
-                  <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded font-medium">Fixed to Email</span>
+                <div className="w-full p-2.5 rounded-lg border border-purple-200 bg-white/90 text-slate-700 font-mono text-xs flex items-center justify-between">
+                  <span className="truncate">{email || 'Enter email above (مندرجہ بالا ای میل درج کریں)'}</span>
+                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded shrink-0">Login ID</span>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  ایڈمن کا لاگ ان آئی ڈی ان کی ای میل ہوگی (کوئی الگ یوزر آئی ڈی نہیں ہے)
+                  ایڈمن کا ای میل آئی ڈی ہی لاگ ان آئی ڈی ہوگا، الگ یوزر آئی ڈی کی ضرورت نہیں
                 </p>
               </div>
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">
-                  Initial Password / ابتدائی پاسورڈ <span className="text-red-500">*</span>
+                  Password / لاگ ان پاسورڈ <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -287,7 +253,7 @@ export const AdminManagementTab: React.FC = () => {
                   className="w-full p-2.5 rounded-lg border border-purple-300 bg-white text-slate-900 font-mono text-xs focus:ring-2 focus:ring-purple-200"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  ایڈمن کے لیے ابتدائی پاسورڈ مقرر کریں (بعد میں تبدیل کیا جا سکتا ہے)
+                  سپر ایڈمن یہاں ایڈمن کے لیے پاسورڈ مقرر کریں (بعد میں ایڈمن خود تبدیل کر سکتے ہیں)
                 </p>
               </div>
             </div>
@@ -369,11 +335,11 @@ export const AdminManagementTab: React.FC = () => {
                       </div>
                       <div>
                         <div className="font-bold text-slate-900">{admin.fullName || admin.name}</div>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                          <span className="font-mono text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
-                            Login ID: {admin.email}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-mono text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.2 rounded border border-purple-200">
+                            ID: {admin.id}
                           </span>
-                          <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                          <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200">
                             Pass: {(admin as any).initialPassword || 'admin123'}
                           </span>
                         </div>
@@ -450,7 +416,11 @@ export const AdminManagementTab: React.FC = () => {
 
                       <button
                         type="button"
-                        onClick={() => setDeletingAdmin(admin)}
+                        onClick={() => {
+                          if (confirm(`Delete admin ${admin.fullName || admin.name}?`)) {
+                            deleteAdmin(admin.id);
+                          }
+                        }}
                         className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete Administrator"
                       >
@@ -464,20 +434,6 @@ export const AdminManagementTab: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* Super Admin Delete Modal for Admin */}
-      <SuperAdminDeleteModal
-        isOpen={!!deletingAdmin}
-        onClose={() => setDeletingAdmin(null)}
-        entityType="admin"
-        entity={deletingAdmin}
-      />
-
-      {/* Super Admin Name Modal */}
-      <SuperAdminNameModal
-        isOpen={isNameModalOpen}
-        onClose={() => setIsNameModalOpen(false)}
-      />
     </div>
   );
 };

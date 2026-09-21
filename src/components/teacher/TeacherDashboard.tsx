@@ -252,7 +252,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <h3 className="text-xl font-bold text-slate-900">My Group Cohorts</h3>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Group classes assigned to your weekly schedule (max 10 students each).
+            Group classes assigned to your weekly schedule with dedicated Google Meet room & Google Calendar synchronization.
           </p>
         </div>
 
@@ -275,7 +275,40 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   <div><strong>Course:</strong> {course?.name}</div>
                   <div><strong>Days:</strong> {group.scheduleDays?.join(', ') || group.days?.join(', ') || 'Mon, Wed, Fri'}</div>
                   <div><strong>Start Time:</strong> {group.scheduleTime || group.startTime || '19:00'}</div>
+                  {group.calendarEventId && (
+                    <div className="text-emerald-700 font-semibold flex items-center gap-1 mt-1">
+                      <span>✓ Google Calendar Synced (Co-host access)</span>
+                      {group.calendarHtmlLink && (
+                        <a
+                          href={group.calendarHtmlLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline inline-flex items-center"
+                        >
+                          <ExternalLink className="w-3 h-3 ml-0.5" />
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {group.meetLink && (
+                  <div className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Video className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="text-xs font-bold text-blue-900">Google Meet Room</span>
+                    </div>
+                    <a
+                      href={group.meetLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold"
+                    >
+                      <span>Join Room</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
 
                 <div>
                   <div className="text-xs font-bold text-slate-800 mb-2">Enrolled Students:</div>

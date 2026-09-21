@@ -10,6 +10,19 @@ export type ClassStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
 
 export type PaymentStatus = 'pending' | 'verified' | 'rejected';
 
+export interface ClassParticipant {
+  id: string;
+  name: string;
+  role: Role;
+  joinedAt: string;
+  avatar?: string;
+  micMuted?: boolean;
+  videoOff?: boolean;
+  audioOn?: boolean;
+  videoOn?: boolean;
+  handRaised?: boolean;
+}
+
 export interface AdminPermissions {
   students: boolean;
   teachers: boolean;
@@ -30,16 +43,16 @@ export interface User {
   phone: string;
   username?: string;
   password?: string;
-  hasChangedPassword?: boolean;
   role: Role;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending';
   avatar?: string;
   createdAt: string;
+  hasChangedPassword?: boolean;
 }
 
 export interface Student {
   id: string;
-  studentId: string; // e.g. 260901 (6 digits: YYMMSS)
+  studentId: string; // e.g. KT26090001
   userId: string;
   fullName: string;
   fatherName: string;
@@ -61,8 +74,17 @@ export interface Student {
   rejectionReason?: string;
   assignedCourseId?: string;
   assignedTeacherId?: string;
+  assignedTeacher?: string;
   assignedGroupId?: string;
   groupId?: string;
+  assignedAdminId?: string;
+  assignedAdmin?: string;
+  email?: string;
+  meetLink?: string;
+  calendarEventId?: string;
+  calendarHtmlLink?: string;
+  fee?: number;
+  monthlyFee?: number;
   oneToOneSchedule?: {
     days: string[];
     time: string;
@@ -71,14 +93,8 @@ export interface Student {
   status?: 'active' | 'inactive' | 'pending';
   admissionDate?: string;
   feeStatus?: 'paid' | 'pending';
-  fee?: number;
-  monthlyFee?: number;
-  assignedTeacher?: string;
-  assignedAdminId?: string;
-  assignedAdmin?: string;
   initialPassword: string;
   hasChangedPassword?: boolean;
-  meetLink?: string;
   createdAt: string;
   verifiedAt?: string;
 }
@@ -111,7 +127,7 @@ export interface Teacher {
   address?: string;
   availableSlots?: (TeacherSlotItem | string)[];
   joiningDate: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending';
   bio?: string;
   initialPassword?: string;
   hasChangedPassword?: boolean;
@@ -127,11 +143,12 @@ export interface AdminUser {
   email: string;
   phone: string;
   mobile?: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending';
   initialPassword?: string;
   hasChangedPassword?: boolean;
   permissions: AdminPermissions;
   assignedStudentIds?: string[];
+  assignedAdminId?: string;
   createdAt: string;
 }
 
@@ -144,9 +161,9 @@ export interface Course {
   urduName?: string;
   description: string;
   urduDescription?: string;
-  fee: number; // in INR/USD e.g. 500
-  groupFee?: number; // fee for group class
-  oneToOneFee?: number; // fee for one-to-one class
+  fee: number; // in INR/USD e.g. 500 (standard/fallback or single fee)
+  groupFee?: number; // specific fee for group format
+  oneToOneFee?: number; // specific fee for one-to-one format
   currency?: string;
   duration: string; // e.g. "3 Months"
   status: 'active' | 'inactive';
@@ -171,16 +188,8 @@ export interface Group {
   studentIds?: string[];
   status: 'active' | 'inactive';
   meetLink: string;
-}
-
-export interface ClassParticipant {
-  id: string; // studentId or teacherId or userId
-  name: string;
-  role: 'student' | 'teacher' | 'admin';
-  audioOn: boolean;
-  videoOn: boolean;
-  handRaised?: boolean;
-  joinedAt: string; // ISO timestamp
+  calendarEventId?: string;
+  calendarHtmlLink?: string;
 }
 
 export interface ScheduledClass {
@@ -196,14 +205,15 @@ export interface ScheduledClass {
   time?: string;
   durationMinutes?: number;
   meetLink: string;
+  googleMeetCode?: string;
+  calendarEventId?: string;
+  calendarHtmlLink?: string;
   status: ClassStatus;
-  topic?: string;
-  notes?: string;
   teacherJoined?: boolean;
   teacherJoinedAt?: string;
   participants?: ClassParticipant[];
-  googleMeetCode?: string;
-  googleCalendarEventId?: string;
+  topic?: string;
+  notes?: string;
 }
 
 export interface TeacherSlot {

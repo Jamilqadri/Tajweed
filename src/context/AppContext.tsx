@@ -45,7 +45,13 @@ import {
 import {
   isRealGoogleMeetLink,
   extractMeetingCode,
+  getCachedAccessToken,
 } from '../lib/googleMeetService';
+import {
+  createOrUpdateGroupCalendarEvent,
+  createOrUpdateOneToOneCalendarEvent,
+  CalendarEventResult,
+} from '../lib/googleCalendarService';
 
 interface AppContextType {
   // Language & i18n
@@ -154,6 +160,8 @@ interface AppContextType {
   updateClassMeetLink: (classId: string, meetLink: string) => boolean;
   joinLiveClass: (classId: string, participant?: ClassParticipant) => Promise<boolean>;
   syncAllMeetLinks: () => Promise<number>;
+  syncGroupCalendarAndMeet: (groupId: string) => Promise<CalendarEventResult>;
+  syncOneToOneCalendarAndMeet: (studentId: string, teacherIdArg?: string) => Promise<CalendarEventResult>;
   updateParticipantMediaStatus: (
     classId: string,
     participantId: string,
@@ -1162,10 +1170,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const teacher = effectiveTeacherId ? teachers.find((t) => t.id === effectiveTeacherId) : null;
     const course = courses.find((c) => c.id === courseId);
 
+    // Group Capacity Check: Ensure group does not exceed configured Maximum Students
+    if (classType === 'group' && group) {
+      const maxCap = group.maxCapacity || group.capacity || 10;
+      const currentIds = group.studentIds || [];
+      if (currentIds.length >= maxCap && !currentIds.includes(student.id) && !currentIds.includes(student.studentId)) {
+        console.warn(`Cannot assign student: Group "${group.name}" is already at maximum capacity of ${maxCap} students.`);
+        return false;
+      }
+    }
+
     const applicableFee =
       classType === 'group'
         ? (course?.groupFee ?? course?.fee ?? 500)
         : (course?.oneToOneFee ?? (course?.fee ? course.fee * 2 : 1000));
+
+    // Rule 4: If a Group already has a Google Meet link, all newly assigned students automatically use the same Group Meet link
+    const effectiveMeetLink = classType === 'group' && group?.meetLink ? group.meetLink : (student.meetLink || '');
 
     const updatedStudent: Student = {
       ...student,
@@ -1178,6 +1199,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       assignedTeacherId: effectiveTeacherId,
       assignedGroupId: classType === 'group' ? groupId : undefined,
       groupId: classType === 'group' ? groupId : undefined,
+      meetLink: effectiveMeetLink,
+      calendarEventId: classType === 'group' ? group?.calendarEventId : student.calendarEventId,
+      calendarHtmlLink: classType === 'group' ? group?.calendarHtmlLink : student.calendarHtmlLink,
       fee: student.fee || applicableFee,
       monthlyFee: student.monthlyFee || applicableFee,
       oneToOneSchedule: classType === 'one_to_one' && oneToOneDays && oneToOneTime ? {
@@ -1232,7 +1256,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Schedule a class or link to existing group schedule
     const today = new Date().toISOString().split('T')[0];
-    const meetCode = Math.random().toString(36).substring(2, 6) + '-' + Math.random().toString(36).substring(2, 6);
     const newClass: ScheduledClass = {
       id: 'class_' + Date.now(),
       courseId,
@@ -1243,7 +1266,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       date: today,
       startTime: classType === 'one_to_one' ? (oneToOneTime || '18:00') : (group?.startTime || '19:00'),
       endTime: classType === 'one_to_one' ? '18:45' : (group?.endTime || '19:45'),
-      meetLink: group?.meetLink || `https://meet.google.com/kan-${meetCode}`,
+      meetLink: effectiveMeetLink,
+      googleMeetCode: extractMeetingCode(effectiveMeetLink),
+      calendarEventId: classType === 'group' ? group?.calendarEventId : undefined,
+      calendarHtmlLink: classType === 'group' ? group?.calendarHtmlLink : undefined,
       status: 'scheduled',
       topic: `${course?.name || 'Tajweed'} - Introductory Articulation & Orientation`,
       notes: `Assigned on admission verification.`,
@@ -1251,6 +1277,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setClasses((prev) => [newClass, ...prev]);
     saveDoc('classes', newClass.id, newClass).catch((e) => console.error(e));
+
+    // Automatic Google Calendar event management:
+    // If One-to-One: Create separate Google Calendar event with teacher as co-host and student as attendee
+    // If Group: Update attendees on existing group calendar event with new student's email
+    if (classType === 'one_to_one') {
+      setTimeout(() => {
+        syncOneToOneCalendarAndMeet(student.id, effectiveTeacherId).catch((err) => {
+          console.warn('Auto 1-on-1 calendar sync on verification:', err);
+        });
+      }, 500);
+    } else if (classType === 'group' && groupId) {
+      setTimeout(() => {
+        syncGroupCalendarAndMeet(groupId).catch((err) => {
+          console.warn('Auto group calendar sync on verification:', err);
+        });
+      }, 500);
+    }
 
     // Update Google Sheet sync row
     setGoogleSheets((prev) =>
@@ -1538,15 +1581,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ? groupData.meetLink.trim()
         : '';
 
+    const capacityNum = Number(groupData.maxCapacity || groupData.capacity || 10);
+
     const newGroup: Group = {
       ...groupData,
       id: groupId,
       currentStudents: 0,
+      capacity: capacityNum,
+      maxCapacity: capacityNum,
       meetLink: cleanMeet,
     };
     setGroups((prev) => [...prev, newGroup]);
     saveDoc('groups', newGroup.id, newGroup).catch((e) => console.error(e));
-    addLog('CREATE_GROUP', `Created group ${newGroup.name}`);
+    addLog('CREATE_GROUP', `Created group ${newGroup.name} (Max capacity: ${capacityNum})`);
+
+    // Rule 3: When a Group is created and a Teacher is assigned, automatically create/manage Google Calendar event and REAL Google Meet link
+    if (newGroup.teacherId) {
+      setTimeout(() => {
+        syncGroupCalendarAndMeet(newGroup.id).catch((err) => {
+          console.warn('Auto calendar sync on group creation:', err);
+        });
+      }, 500);
+    }
+
     return newGroup;
   };
 
@@ -1554,8 +1611,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setGroups((prev) =>
       prev.map((g) => {
         if (g.id === id) {
-          const updated = { ...g, ...data };
+          const updated = {
+            ...g,
+            ...data,
+            capacity: data.maxCapacity !== undefined ? Number(data.maxCapacity) : (data.capacity !== undefined ? Number(data.capacity) : g.capacity),
+            maxCapacity: data.maxCapacity !== undefined ? Number(data.maxCapacity) : (data.capacity !== undefined ? Number(data.capacity) : g.maxCapacity),
+          };
           saveDoc('groups', id, updated).catch((e) => console.error(e));
+
+          // If teacher or schedule changed, trigger calendar sync
+          if (data.teacherId || data.days || data.scheduleDays || data.startTime || data.scheduleTime) {
+            setTimeout(() => {
+              syncGroupCalendarAndMeet(id).catch((err) => {
+                console.warn('Auto calendar sync on group update:', err);
+              });
+            }, 500);
+          }
+
           return updated;
         }
         return g;
@@ -1580,6 +1652,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const nh = String(Math.floor(total / 60) % 24).padStart(2, '0');
     const nm = String(total % 60).padStart(2, '0');
     const endTime = `${nh}:${nm}`;
+    const parsedCapacity = Number(groupData.maxCapacity || groupData.capacity || 10);
 
     return createGroup({
       name: groupData.name,
@@ -1590,8 +1663,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       startTime,
       endTime,
       scheduleTime: startTime,
-      capacity: groupData.maxCapacity || groupData.capacity || 10,
-      maxCapacity: groupData.maxCapacity || groupData.capacity || 10,
+      capacity: parsedCapacity,
+      maxCapacity: parsedCapacity,
       studentIds: groupData.studentIds || [],
       status: groupData.status || 'active',
       meetLink:
@@ -2643,9 +2716,186 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     setClasses(updatedClasses);
 
+    // 4. Rule 4: If a Group already has a Google Meet link, all newly assigned students should automatically use the same Group Meet link
+    updatedGroups.forEach((grp) => {
+      if (grp.meetLink) {
+        updatedStudents.forEach((stu) => {
+          const isAssignedToGroup =
+            stu.assignedGroupId === grp.id ||
+            stu.groupId === grp.id ||
+            (grp.studentIds && (grp.studentIds.includes(stu.id) || grp.studentIds.includes(stu.studentId)));
+
+          if (isAssignedToGroup && stu.meetLink !== grp.meetLink) {
+            stu.meetLink = grp.meetLink;
+            saveDoc('students', stu.id, { ...stu, meetLink: grp.meetLink }).catch((e) => console.error(e));
+            updatedCount++;
+          }
+        });
+      }
+    });
+
     broadcastDbChange('UPDATE_CLASS_LIVE', { collectionName: 'classes', updatedCount });
     addLog('SYNC_MEET_LINKS', `Synchronized unique Google Meet links for ${updatedCount} items in Firestore`);
     return updatedCount;
+  };
+
+  // Automatic Google Calendar event and Google Meet management for Groups
+  const syncGroupCalendarAndMeet = async (groupId: string): Promise<CalendarEventResult> => {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) {
+      return { success: false, error: 'Group not found.' };
+    }
+
+    const teacher = teachers.find((t) => t.id === group.teacherId);
+    if (!teacher || !teacher.email) {
+      return { success: false, error: 'Assigned teacher not found or teacher email is missing.' };
+    }
+
+    // Registered email addresses of all assigned students
+    const assignedStudents = students.filter(
+      (s) =>
+        s.assignedGroupId === group.id ||
+        s.groupId === group.id ||
+        (group.studentIds && (group.studentIds.includes(s.id) || group.studentIds.includes(s.studentId)))
+    );
+
+    const studentEmails = assignedStudents.map((s) => {
+      const u = users.find((usr) => usr.id === s.userId);
+      const email = s.email || u?.email || `${s.studentId.toLowerCase()}@kanzutajweed.com`;
+      return {
+        fullName: s.fullName,
+        email,
+      };
+    });
+
+    const result = await createOrUpdateGroupCalendarEvent({
+      groupName: group.name,
+      teacher: { fullName: teacher.fullName, email: teacher.email },
+      students: studentEmails,
+      days: group.scheduleDays || group.days || ['Monday', 'Wednesday', 'Friday'],
+      startTime: group.scheduleTime || group.startTime || '19:00',
+      endTime: group.endTime || '19:45',
+      existingEventId: group.calendarEventId,
+    });
+
+    if (result.success && result.meetLink) {
+      // 1. Update Group document
+      const updatedGroup: Group = {
+        ...group,
+        meetLink: result.meetLink,
+        calendarEventId: result.eventId,
+        calendarHtmlLink: result.htmlLink,
+      };
+      setGroups((prev) => prev.map((g) => (g.id === groupId ? updatedGroup : g)));
+      await saveDoc('groups', groupId, updatedGroup);
+
+      // 2. Rule 4: All assigned students automatically use the same Group Meet link
+      setStudents((prev) =>
+        prev.map((s) => {
+          const isAssigned =
+            s.assignedGroupId === groupId ||
+            s.groupId === groupId ||
+            (group.studentIds && (group.studentIds.includes(s.id) || group.studentIds.includes(s.studentId)));
+
+          if (isAssigned) {
+            const updatedStu = {
+              ...s,
+              meetLink: result.meetLink!,
+              calendarEventId: result.eventId,
+              calendarHtmlLink: result.htmlLink,
+            };
+            saveDoc('students', s.id, updatedStu).catch(console.error);
+            return updatedStu;
+          }
+          return s;
+        })
+      );
+
+      // 3. Update all classes for this group
+      setClasses((prev) =>
+        prev.map((c) => {
+          if (c.groupId === groupId) {
+            const updatedCls: ScheduledClass = {
+              ...c,
+              meetLink: result.meetLink!,
+              googleMeetCode: extractMeetingCode(result.meetLink!),
+              calendarEventId: result.eventId,
+              calendarHtmlLink: result.htmlLink,
+            };
+            saveDoc('classes', c.id, updatedCls).catch(console.error);
+            return updatedCls;
+          }
+          return c;
+        })
+      );
+
+      broadcastDbChange('UPDATE_GROUP_CALENDAR', { groupId, meetLink: result.meetLink });
+      addLog('CALENDAR_SYNC', `Google Calendar & Meet synced for Group ${group.name}: ${result.meetLink}`);
+    }
+
+    return result;
+  };
+
+  // Automatic Google Calendar event management for One-to-One classes
+  const syncOneToOneCalendarAndMeet = async (studentId: string, teacherIdArg?: string): Promise<CalendarEventResult> => {
+    const student = students.find((s) => s.id === studentId || s.studentId === studentId);
+    if (!student) {
+      return { success: false, error: 'Student not found.' };
+    }
+
+    const effectiveTeacherId = teacherIdArg || student.assignedTeacherId;
+    const teacher = teachers.find((t) => t.id === effectiveTeacherId);
+    if (!teacher || !teacher.email) {
+      return { success: false, error: 'Assigned teacher not found or teacher email is missing.' };
+    }
+
+    const course = courses.find((c) => c.id === (student.assignedCourseId || student.courseId));
+    const user = users.find((u) => u.id === student.userId);
+    const studentEmail = student.email || user?.email || `${student.studentId.toLowerCase()}@kanzutajweed.com`;
+
+    const result = await createOrUpdateOneToOneCalendarEvent({
+      student: { fullName: student.fullName, email: studentEmail },
+      teacher: { fullName: teacher.fullName, email: teacher.email },
+      courseName: course?.name,
+      days: student.oneToOneSchedule?.days,
+      startTime: student.oneToOneSchedule?.time || '18:00',
+      existingEventId: student.calendarEventId,
+    });
+
+    if (result.success && result.meetLink) {
+      // 1. Update Student document
+      const updatedStudent: Student = {
+        ...student,
+        meetLink: result.meetLink,
+        calendarEventId: result.eventId,
+        calendarHtmlLink: result.htmlLink,
+      };
+      setStudents((prev) => prev.map((s) => (s.id === student.id ? updatedStudent : s)));
+      await saveDoc('students', student.id, updatedStudent);
+
+      // 2. Update classes for this 1-on-1 student
+      setClasses((prev) =>
+        prev.map((c) => {
+          if (c.studentId === student.id || c.studentId === student.studentId) {
+            const updatedCls: ScheduledClass = {
+              ...c,
+              meetLink: result.meetLink!,
+              googleMeetCode: extractMeetingCode(result.meetLink!),
+              calendarEventId: result.eventId,
+              calendarHtmlLink: result.htmlLink,
+            };
+            saveDoc('classes', c.id, updatedCls).catch(console.error);
+            return updatedCls;
+          }
+          return c;
+        })
+      );
+
+      broadcastDbChange('UPDATE_STUDENT_CALENDAR', { studentId: student.id, meetLink: result.meetLink });
+      addLog('CALENDAR_SYNC', `Google Calendar & Meet synced for 1-on-1 Student ${student.fullName}: ${result.meetLink}`);
+    }
+
+    return result;
   };
 
   // Notification read handler
@@ -2763,6 +3013,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         syncGoogleSheets,
         exportGoogleSheetsCsv,
         syncAllMeetLinks,
+        syncGroupCalendarAndMeet,
+        syncOneToOneCalendarAndMeet,
 
         markNotificationAsRead,
         unreadNotificationsCount,
